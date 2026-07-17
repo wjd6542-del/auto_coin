@@ -38,3 +38,22 @@ class BalanceLog(Base):
     ts: Mapped[datetime] = mapped_column(DateTime)
     total_krw: Mapped[float] = mapped_column(Float)
     mode: Mapped[str] = mapped_column(String(10))
+
+
+class OpenPosition(Base):
+    __tablename__ = "positions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(20))
+    entry_price: Mapped[float] = mapped_column(Float)
+    qty: Mapped[float] = mapped_column(Float)
+    high_price: Mapped[float] = mapped_column(Float)
+    opened_at: Mapped[datetime] = mapped_column(DateTime)
+    mode: Mapped[str] = mapped_column(String(10))
+
+
+class PaperAccount(Base):
+    __tablename__ = "paper_account"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mode: Mapped[str] = mapped_column(String(10))
+    cash_krw: Mapped[float] = mapped_column(Float)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)

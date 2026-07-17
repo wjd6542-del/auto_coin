@@ -12,14 +12,19 @@ from config import database
 from db.store import Store
 
 
-def load_data(store: Store) -> tuple[pd.DataFrame, pd.DataFrame]:
-    return store.balance_df(), store.trades_df()
+def load_data(store: Store, mode: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    balance, trades = store.balance_df(), store.trades_df()
+    if mode is not None:
+        balance = balance[balance["mode"] == mode].reset_index(drop=True)
+        trades = trades[trades["mode"] == mode].reset_index(drop=True)
+    return balance, trades
 
 
 def render() -> None:
     st.title("코인 자동매매 봇 대시보드")
     store = Store(url=database.url())
-    balance, trades = load_data(store)
+    mode = st.radio("모드", ["backtest", "paper"], horizontal=True)
+    balance, trades = load_data(store, mode=mode)
 
     if balance.empty:
         st.info("아직 데이터가 없다. `python3 main.py --mode backtest` 먼저 실행.")
