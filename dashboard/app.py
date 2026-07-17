@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from config import settings, database
+from config import database
 from db.store import Store
 
 

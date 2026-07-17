@@ -16,7 +16,7 @@ def run_backtest(client, store, settings) -> BacktestResult:
                 candles[symbol] = df
         except Exception as e:
             print(f"skip {symbol}: {e}")
-    return Backtest(settings, store).run(candles)
+    return Backtest(settings, store, fee_rate=settings.fee_rate).run(candles)
 
 
 def main() -> None:

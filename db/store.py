@@ -32,7 +32,7 @@ class Store:
             s.commit()
 
     def trades_df(self) -> pd.DataFrame:
-        return pd.read_sql(select(Trade), self.engine)
+        return pd.read_sql(select(Trade).order_by(Trade.ts), self.engine)
 
     def balance_df(self) -> pd.DataFrame:
-        return pd.read_sql(select(BalanceLog), self.engine)
+        return pd.read_sql(select(BalanceLog).order_by(BalanceLog.ts), self.engine)

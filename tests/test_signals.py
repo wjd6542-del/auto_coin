@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 from config import Settings
 from strategy.signals import evaluate, Signal
