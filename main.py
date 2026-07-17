@@ -1,6 +1,6 @@
 import argparse
 
-from config import settings as default_settings, database
+from config import database
 from bithumb.client import BithumbClient
 from db.store import Store
 from engine.backtest import Backtest, BacktestResult
@@ -76,13 +76,17 @@ def main() -> None:
     if args.mode == "backtest":
         store = Store(url=database.url())
         store.create_all()
-        result = run_backtest(BithumbClient(), store, default_settings)
+        settings = store.get_settings()
+        result = run_backtest(BithumbClient(), store, settings)
         print(f"최종 자본: {result.final_capital:,.0f} KRW")
         print(f"수익률: {result.return_pct:.2f}%")
         print(f"거래 수: {result.num_trades}")
 
     elif args.mode == "tune":
-        rows = run_tune(BithumbClient(), default_settings, DEFAULT_GRID)
+        store = Store(url=database.url())
+        store.create_all()
+        settings = store.get_settings()
+        rows = run_tune(BithumbClient(), settings, DEFAULT_GRID)
         _print_tune_table(rows)
         best = rows[0]
         print(f"\n최고 조합: short={best['short_period']} "
@@ -93,7 +97,8 @@ def main() -> None:
     elif args.mode == "paper":
         store = Store(url=database.url())
         store.create_all()
-        summary = run_paper(BithumbClient(), store, default_settings)
+        settings = store.get_settings()
+        summary = run_paper(BithumbClient(), store, settings)
         print(f"현금: {summary['cash']:,.0f} KRW")
         print(f"보유 종목: {summary['positions']}개")
         print(f"당일 체결: {summary['filled']}건")

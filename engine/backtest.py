@@ -62,7 +62,8 @@ class Backtest:
                 sig = evaluate(window, self.settings, in_position=False)
                 if sig.action == "buy":
                     price = float(df.loc[date, "close"])
-                    qty = self.risk.position_size(capital, price)
+                    daily_value = price * float(df.loc[date, "volume"])
+                    qty = self.risk.position_size(capital, price, daily_value)
                     cost = qty * price * (1 + self.fee_rate)
                     if cost > capital:
                         continue

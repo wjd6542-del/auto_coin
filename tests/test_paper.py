@@ -7,7 +7,7 @@ from engine.paper import PaperTrader
 def _series(closes):
     idx = pd.date_range("2025-01-01", periods=len(closes), freq="D")
     return pd.DataFrame({"open": closes, "high": closes, "low": closes,
-                         "close": closes, "volume": [1.0] * len(closes)}, index=idx)
+                         "close": closes, "volume": [1_000_000.0] * len(closes)}, index=idx)
 
 
 class StubClient:
