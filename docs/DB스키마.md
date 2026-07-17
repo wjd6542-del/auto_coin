@@ -98,6 +98,22 @@ CREATE DATABASE IF NOT EXISTS coin
 | `cash_krw` | FLOAT | 현금 잔고 |
 | `updated_at` | DATETIME | 갱신 시각 |
 
+### 3.7 `app_settings` — 전략 설정 (단일 행)
+
+전략/리스크/유니버스 파라미터를 저장. 대시보드 UI에서 수정, 봇이 실행 시 `Store.get_settings()`로 읽음. DB가 비면 config 기본값으로 초기화.
+
+| 컬럼 | 타입 | 비고 |
+|------|------|------|
+| `id` | INT PK | |
+| `short_period`,`long_period`,`rsi_period` | INT | 지표 기간 |
+| `rsi_oversold`,`rsi_recover` | FLOAT | RSI 임계 |
+| `use_rsi_filter` | BOOL | 추세추종(F)/보수적(T) |
+| `trailing_stop_pct`,`position_pct`,`max_volume_pct` | FLOAT | 리스크·자금 (fraction) |
+| `max_positions`,`top_n` | INT | 동시 종목·유니버스 |
+| `min_trade_value_krw`,`initial_capital`,`fee_rate` | FLOAT | 유동성·자본·수수료 |
+
+> 인프라 값(db_path, payment_currency, DB 접속정보)은 DB 대상 아님 — config/.env 유지.
+
 ## 4. 향후 확장 (마일스톤 3 예정)
 
 - `positions`/`paper_account`에 `(mode, symbol)` / `(mode)` 유니크 제약 추가 (중복행 방지).
