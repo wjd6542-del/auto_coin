@@ -71,7 +71,8 @@ class PaperTrader:
             if sig.action != "buy":
                 continue
             price = float(candles[symbol]["close"].iloc[-1])
-            qty = self.risk.position_size(cash, price)
+            daily_value = price * float(candles[symbol]["volume"].iloc[-1])
+            qty = self.risk.position_size(cash, price, daily_value)
             cost = qty * price * (1 + self.fee_rate)
             if cost > cash or qty <= 0:
                 continue

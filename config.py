@@ -51,6 +51,7 @@ class Settings:
     trailing_stop_pct: float = 0.10
     max_positions: int = 4
     position_pct: float = 0.20
+    max_volume_pct: float = 0.01   # 종목당 투자금을 코인 거래대금의 이 비율 이하로 제한
     # 유니버스
     top_n: int = 100
     min_trade_value_krw: float = 1_000_000_000.0

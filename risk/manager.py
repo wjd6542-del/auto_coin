@@ -18,8 +18,12 @@ class RiskManager:
     def can_enter(self, open_positions: dict[str, Position]) -> bool:
         return len(open_positions) < self.settings.max_positions
 
-    def position_size(self, capital: float, price: float) -> float:
-        return capital * self.settings.position_pct / price
+    def position_size(self, capital: float, price: float,
+                      daily_value: float | None = None) -> float:
+        invest = capital * self.settings.position_pct
+        if daily_value is not None and self.settings.max_volume_pct > 0:
+            invest = min(invest, daily_value * self.settings.max_volume_pct)
+        return invest / price
 
     def update_high(self, pos: Position, price: float) -> None:
         if price > pos.high_price:
