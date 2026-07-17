@@ -40,7 +40,7 @@ load_env()
 @dataclass
 class Settings:
     # 지표
-    short_period: int = 20
+    short_period: int = 15
     long_period: int = 60
     rsi_period: int = 14
     rsi_oversold: float = 30.0
@@ -48,7 +48,7 @@ class Settings:
     # 전략 전환: True=보수적(골든크로스+RSI회복), False=추세추종(골든크로스만)
     use_rsi_filter: bool = False
     # 리스크·자금
-    trailing_stop_pct: float = 0.05
+    trailing_stop_pct: float = 0.10
     max_positions: int = 4
     position_pct: float = 0.20
     # 유니버스
