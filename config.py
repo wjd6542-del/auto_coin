@@ -45,6 +45,8 @@ class Settings:
     rsi_period: int = 14
     rsi_oversold: float = 30.0
     rsi_recover: float = 40.0
+    # 전략 전환: True=보수적(골든크로스+RSI회복), False=추세추종(골든크로스만)
+    use_rsi_filter: bool = False
     # 리스크·자금
     trailing_stop_pct: float = 0.05
     max_positions: int = 4

@@ -32,7 +32,11 @@ def evaluate(candles: pd.DataFrame, settings: Settings, in_position: bool) -> Si
 
     reason = {"short": float(short_now), "long": float(long_now), "rsi": float(rsi_now)}
 
-    if not in_position and golden and rsi_recovered:
+    # 추세추종(use_rsi_filter=False): 골든크로스만으로 매수.
+    # 보수적(use_rsi_filter=True): 골든크로스 + RSI 회복 동시 만족해야 매수.
+    entry_ok = golden and (rsi_recovered if settings.use_rsi_filter else True)
+
+    if not in_position and entry_ok:
         return Signal("buy", reason)
     if in_position and dead:
         return Signal("sell", reason)
