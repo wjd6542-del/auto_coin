@@ -60,7 +60,7 @@ CREATE DATABASE IF NOT EXISTS coin
 
 > 마일스톤 1(백테스트)에서는 `trades`·`balance_log`만 기록하고, `signals` 로깅은 페이퍼/실거래 단계에서 활성화 예정. 테이블은 미리 정의해둔다.
 
-### 3.3 `balance_log` — 자산 추이
+### 3.4 `balance_log` — 자산 추이
 
 시점별 총자산(현금 + 보유 평가액). 수익률 그래프의 데이터 소스.
 
@@ -71,11 +71,9 @@ CREATE DATABASE IF NOT EXISTS coin
 | `total_krw` | FLOAT | 총자산 (KRW) |
 | `mode` | VARCHAR(10) | `backtest` / `paper` / `live` |
 
-## 4. 향후 확장 (미구현)
+### 3.5 `positions` — 보유 포지션 (마일스톤 2 구현됨)
 
-### `positions` — 보유 현황 (마일스톤 3 예정)
-
-실거래 재시작 시 보유 포지션 복구용. 백테스트에서는 메모리로만 관리하므로 이번 단계엔 테이블 미생성.
+페이퍼/실거래의 현재 보유 포지션. 재실행 시 상태 복구용. (ORM 클래스명 `OpenPosition`, `risk.manager.Position` 데이터클래스와 구분)
 
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
@@ -83,20 +81,39 @@ CREATE DATABASE IF NOT EXISTS coin
 | `symbol` | VARCHAR(20) | 코인 심볼 |
 | `entry_price` | FLOAT | 진입 평단가 |
 | `qty` | FLOAT | 보유 수량 |
-| `high_price` | FLOAT | 진입 후 고점 (트레일링 스톱 기준) |
+| `high_price` | FLOAT | 진입 후 고점 (트레일링 기준) |
 | `opened_at` | DATETIME | 진입 시각 |
-| `mode` | VARCHAR(10) | 운영 모드 |
+| `mode` | VARCHAR(10) | `paper`/`live` |
+
+> ⚠️ 마일스톤 3(실거래) 전 `(mode, symbol)` 유니크 제약 추가 필요 (중복행 방지).
+
+### 3.6 `paper_account` — 가상 현금 (마일스톤 2 구현됨)
+
+페이퍼 트레이딩의 가상 현금 잔고. mode당 1행.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | INT PK, auto | 기본키 |
+| `mode` | VARCHAR(10) | `paper` |
+| `cash_krw` | FLOAT | 현금 잔고 |
+| `updated_at` | DATETIME | 갱신 시각 |
+
+## 4. 향후 확장 (마일스톤 3 예정)
+
+- `positions`/`paper_account`에 `(mode, symbol)` / `(mode)` 유니크 제약 추가 (중복행 방지).
+- 실거래(`mode=live`) 시 실제 빗썸 잔고와 동기화.
 
 ## 5. ER 개요
 
 ```
-trades       (독립)   — 체결 이력
-signals      (독립)   — 신호 이력
-balance_log  (독립)   — 자산 이력
-positions*   (독립)   — 현재 보유 (*미구현)
+trades         (독립)   — 체결 이력
+signals        (독립)   — 신호 이력 (페이퍼/실거래에서 활성화)
+balance_log    (독립)   — 자산 이력
+positions      (독립)   — 현재 보유 (페이퍼/실거래, 구현됨)
+paper_account  (독립)   — 가상 현금 (페이퍼, 구현됨)
 ```
 
-마일스톤 1에서는 테이블 간 외래키 관계 없이 각각 **이벤트 로그**로 독립 저장한다. `symbol`·`ts`로 조인하여 분석한다.
+테이블 간 외래키 관계 없이 각각 **이벤트 로그/상태 스냅샷**으로 독립 저장한다. `symbol`·`ts`·`mode`로 조인·필터하여 분석한다.
 
 ## 6. 인덱스 (추후 최적화)
 
