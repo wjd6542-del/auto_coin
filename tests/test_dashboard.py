@@ -2,7 +2,7 @@ from datetime import datetime
 
 from config import Settings
 from db.store import Store
-from dashboard.app import load_data
+from dashboard.app import load_data, load_settings
 
 
 def test_load_data_returns_frames(tmp_path):
@@ -28,3 +28,11 @@ def test_load_data_filters_by_mode(tmp_path):
     assert len(balance) == 1
     assert balance.iloc[0]["mode"] == "paper"
     assert len(trades) == 1
+
+
+def test_load_settings_returns_settings(tmp_path):
+    store = Store(str(tmp_path / "ds.db"))
+    store.create_all()
+    settings = load_settings(store)
+    assert isinstance(settings, Settings)
+    assert settings.max_volume_pct == 0.01
