@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+# `streamlit run dashboard/app.py`로 직접 실행할 때 프로젝트 루트를
+# 파이썬 경로에 넣어 config/db 모듈을 찾게 한다.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import pandas as pd
 import streamlit as st
 
