@@ -4,6 +4,7 @@ from config import settings as default_settings, database
 from bithumb.client import BithumbClient
 from db.store import Store
 from engine.backtest import Backtest, BacktestResult
+from engine.paper import PaperTrader
 from engine.tuner import run_grid
 
 
@@ -26,6 +27,10 @@ def fetch_candles(client, settings, min_len: int | None = None) -> dict:
 def run_backtest(client, store, settings) -> BacktestResult:
     candles = fetch_candles(client, settings)
     return Backtest(settings, store, fee_rate=settings.fee_rate).run(candles)
+
+
+def run_paper(client, store, settings) -> dict:
+    return PaperTrader(settings, store, client, fee_rate=settings.fee_rate).run_once()
 
 
 # 튜닝 기본 그리드 (추세추종 파라미터 탐색)
@@ -65,7 +70,7 @@ def _print_tune_table(rows: list[dict]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="backtest",
-                        choices=["backtest", "tune"])
+                        choices=["backtest", "tune", "paper"])
     args = parser.parse_args()
 
     if args.mode == "backtest":
@@ -84,6 +89,15 @@ def main() -> None:
               f"long={best['long_period']} "
               f"트레일링={best['trailing_stop_pct']*100:.0f}% "
               f"→ 수익률 {best['return_pct']:.1f}%, MDD {best['mdd_pct']:.1f}%")
+
+    elif args.mode == "paper":
+        store = Store(url=database.url())
+        store.create_all()
+        summary = run_paper(BithumbClient(), store, default_settings)
+        print(f"현금: {summary['cash']:,.0f} KRW")
+        print(f"보유 종목: {summary['positions']}개")
+        print(f"당일 체결: {summary['filled']}건")
+        print(f"총자산: {summary['total']:,.0f} KRW")
 
 
 if __name__ == "__main__":
