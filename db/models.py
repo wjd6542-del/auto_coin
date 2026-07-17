@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, Float, DateTime
+from sqlalchemy import String, Float, DateTime, Integer, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -57,3 +57,22 @@ class PaperAccount(Base):
     mode: Mapped[str] = mapped_column(String(10))
     cash_krw: Mapped[float] = mapped_column(Float)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class AppSettings(Base):
+    __tablename__ = "app_settings"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    short_period: Mapped[int] = mapped_column(Integer)
+    long_period: Mapped[int] = mapped_column(Integer)
+    rsi_period: Mapped[int] = mapped_column(Integer)
+    rsi_oversold: Mapped[float] = mapped_column(Float)
+    rsi_recover: Mapped[float] = mapped_column(Float)
+    use_rsi_filter: Mapped[bool] = mapped_column(Boolean)
+    trailing_stop_pct: Mapped[float] = mapped_column(Float)
+    max_positions: Mapped[int] = mapped_column(Integer)
+    position_pct: Mapped[float] = mapped_column(Float)
+    max_volume_pct: Mapped[float] = mapped_column(Float)
+    top_n: Mapped[int] = mapped_column(Integer)
+    min_trade_value_krw: Mapped[float] = mapped_column(Float)
+    initial_capital: Mapped[float] = mapped_column(Float)
+    fee_rate: Mapped[float] = mapped_column(Float)

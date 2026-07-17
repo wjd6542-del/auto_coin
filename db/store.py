@@ -4,11 +4,19 @@ import pandas as pd
 from sqlalchemy import create_engine, select, delete
 from sqlalchemy.orm import Session
 
-from db.models import Base, Trade, SignalLog, BalanceLog, OpenPosition, PaperAccount
+from config import Settings
+from db.models import Base, Trade, SignalLog, BalanceLog, OpenPosition, PaperAccount, AppSettings
 from risk.manager import Position
 
 
 class Store:
+    _SETTINGS_FIELDS = (
+        "short_period", "long_period", "rsi_period", "rsi_oversold",
+        "rsi_recover", "use_rsi_filter", "trailing_stop_pct", "max_positions",
+        "position_pct", "max_volume_pct", "top_n", "min_trade_value_krw",
+        "initial_capital", "fee_rate",
+    )
+
     def __init__(self, db_path: str | None = None, url: str | None = None):
         if url is None:
             if db_path is None:
@@ -90,3 +98,25 @@ class Store:
             if row:
                 row.high_price = high
                 s.commit()
+
+    def get_settings(self) -> Settings:
+        with Session(self.engine) as s:
+            row = s.scalars(select(AppSettings)).first()
+            if row is None:
+                defaults = Settings()
+                s.add(AppSettings(**{f: getattr(defaults, f) for f in self._SETTINGS_FIELDS}))
+                s.commit()
+                return defaults
+            values = {f: getattr(row, f) for f in self._SETTINGS_FIELDS}
+        from dataclasses import replace
+        return replace(Settings(), **values)
+
+    def save_settings(self, settings: Settings) -> None:
+        with Session(self.engine) as s:
+            row = s.scalars(select(AppSettings)).first()
+            if row is None:
+                s.add(AppSettings(**{f: getattr(settings, f) for f in self._SETTINGS_FIELDS}))
+            else:
+                for f in self._SETTINGS_FIELDS:
+                    setattr(row, f, getattr(settings, f))
+            s.commit()
