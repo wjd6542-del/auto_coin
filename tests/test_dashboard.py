@@ -36,3 +36,48 @@ def test_load_settings_returns_settings(tmp_path):
     settings = load_settings(store)
     assert isinstance(settings, Settings)
     assert settings.max_volume_pct == 0.01
+
+
+def test_format_trades_korean_columns():
+    import pandas as pd
+    from dashboard.app import format_trades, TRADE_COLUMNS
+    trades = pd.DataFrame([
+        {"ts": "2026-07-18 08:00", "symbol": "ETH", "side": "buy",
+         "price": 2_700_000.0, "qty": 0.1, "fee": 100.0, "mode": "paper"},
+        {"ts": "2026-07-18 09:00", "symbol": "ETH", "side": "sell",
+         "price": 2_900_000.0, "qty": 0.1, "fee": 116.0, "mode": "paper"},
+    ])
+    out = format_trades(trades)
+    assert list(out.columns) == TRADE_COLUMNS
+    # 최신순 → 매도가 먼저
+    assert out.iloc[0]["구분"] == "매도"
+    assert out.iloc[1]["구분"] == "매수"
+    # 거래금액 = 체결가 × 수량
+    assert out.iloc[1]["거래금액(원)"] == 270000.0   # 2,700,000 × 0.1
+    assert out.iloc[0]["거래금액(원)"] == 290000.0   # 2,900,000 × 0.1
+
+
+def test_format_trades_empty():
+    import pandas as pd
+    from dashboard.app import format_trades, TRADE_COLUMNS
+    out = format_trades(pd.DataFrame())
+    assert list(out.columns) == TRADE_COLUMNS
+    assert len(out) == 0
+
+
+def test_holdings_table():
+    from dashboard.app import holdings_table, HOLDING_COLUMNS
+    from risk.manager import Position
+    pos = {"ETH": Position("ETH", entry_price=2_700_000.0, qty=0.1, high_price=2_800_000.0)}
+    out = holdings_table(pos)
+    assert list(out.columns) == HOLDING_COLUMNS
+    assert out.iloc[0]["종목"] == "ETH"
+    assert out.iloc[0]["매수금액(원)"] == 270000.0
+    assert out.iloc[0]["고점(원)"] == 2_800_000.0
+
+
+def test_holdings_table_empty():
+    from dashboard.app import holdings_table, HOLDING_COLUMNS
+    out = holdings_table({})
+    assert list(out.columns) == HOLDING_COLUMNS
+    assert len(out) == 0

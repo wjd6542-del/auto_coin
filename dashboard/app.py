@@ -5,11 +5,16 @@ from pathlib import Path
 # 파이썬 경로에 넣어 config/db 모듈을 찾게 한다.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from dataclasses import replace
+
 import pandas as pd
 import streamlit as st
 
 from config import database, Settings
 from db.store import Store
+
+TRADE_COLUMNS = ["시각", "종목", "구분", "체결가(원)", "수량", "거래금액(원)", "수수료(원)"]
+HOLDING_COLUMNS = ["종목", "매수가(원)", "수량", "매수금액(원)", "고점(원)"]
 
 
 def load_data(store: Store, mode: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -24,51 +29,97 @@ def load_settings(store: Store) -> Settings:
     return store.get_settings()
 
 
+def format_trades(trades: pd.DataFrame) -> pd.DataFrame:
+    """거래 내역을 한글 컬럼 + 거래금액 포함으로 변환한다 (최신순)."""
+    if trades.empty:
+        return pd.DataFrame(columns=TRADE_COLUMNS)
+    df = trades.copy()
+    df["구분"] = df["side"].map({"buy": "매수", "sell": "매도"}).fillna(df["side"])
+    df["거래금액(원)"] = df["price"] * df["qty"]
+    out = df.rename(columns={"ts": "시각", "symbol": "종목", "price": "체결가(원)",
+                             "qty": "수량", "fee": "수수료(원)"})[TRADE_COLUMNS]
+    return out.sort_values("시각", ascending=False).reset_index(drop=True)
+
+
+def holdings_table(positions: dict) -> pd.DataFrame:
+    """보유 포지션을 한글 컬럼 표로 변환한다."""
+    if not positions:
+        return pd.DataFrame(columns=HOLDING_COLUMNS)
+    rows = [{"종목": s, "매수가(원)": p.entry_price, "수량": p.qty,
+             "매수금액(원)": p.entry_price * p.qty, "고점(원)": p.high_price}
+            for s, p in positions.items()]
+    return pd.DataFrame(rows, columns=HOLDING_COLUMNS)
+
+
+def _won(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """지정 컬럼을 천단위 콤마 문자열로 포맷한 표시용 복사본."""
+    out = df.copy()
+    for c in cols:
+        if c in out.columns:
+            out[c] = out[c].map(lambda x: f"{x:,.0f}")
+    if "수량" in out.columns:
+        out["수량"] = out["수량"].map(lambda x: f"{x:,.6f}")
+    return out
+
+
 def render() -> None:
     st.title("코인 자동매매 봇 대시보드")
     store = Store(url=database.url())
-    mode = st.radio("모드", ["backtest", "paper"], horizontal=True)
+    mode = st.radio("모드", ["backtest", "paper"], horizontal=True,
+                    format_func=lambda m: {"backtest": "백테스트",
+                                           "paper": "페이퍼(실시간 가상)"}[m])
     balance, trades = load_data(store, mode=mode)
 
+    # 요약 지표
     if balance.empty:
-        st.info("아직 데이터가 없다. `python3 main.py --mode backtest` 먼저 실행.")
-        return
+        st.info("아직 데이터가 없다. 아래 설정을 확인하고 봇을 실행해라.")
+    else:
+        start = balance.iloc[0]["total_krw"]
+        end = balance.iloc[-1]["total_krw"]
+        ret = (end - start) / start * 100
+        positions = store.get_positions(mode)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("현재 총자산", f"{end:,.0f} 원")
+        c2.metric("수익률", f"{ret:+.2f}%")
+        c3.metric("보유 종목", f"{len(positions)} 개")
+        c4.metric("총 거래", f"{len(trades)} 건")
 
-    start = balance.iloc[0]["total_krw"]
-    end = balance.iloc[-1]["total_krw"]
-    ret = (end - start) / start * 100
-    c1, c2, c3 = st.columns(3)
-    c1.metric("현재 자산", f"{end:,.0f} KRW")
-    c2.metric("수익률", f"{ret:.2f}%")
-    c3.metric("거래 수", f"{len(trades)}")
+        st.subheader("📈 총자산 추이")
+        chart = balance.rename(columns={"total_krw": "총자산(원)"}).set_index("ts")
+        st.line_chart(chart["총자산(원)"])
 
-    st.subheader("총자산 추이")
-    st.line_chart(balance.set_index("ts")["total_krw"])
+        st.subheader("💼 보유 현황")
+        hold = holdings_table(positions)
+        if hold.empty:
+            st.caption("현재 보유 중인 종목이 없다.")
+        else:
+            st.dataframe(_won(hold, ["매수가(원)", "매수금액(원)", "고점(원)"]),
+                         use_container_width=True, hide_index=True)
 
-    st.subheader("거래 내역")
-    st.dataframe(trades.sort_values("ts", ascending=False))
+        st.subheader("📒 거래 내역 (매수·매도)")
+        st.dataframe(_won(format_trades(trades), ["체결가(원)", "거래금액(원)", "수수료(원)"]),
+                     use_container_width=True, hide_index=True)
 
     st.divider()
     with st.expander("⚙️ 전략 설정 (수정 후 저장하면 다음 실행부터 반영)"):
         cur = load_settings(store)
         with st.form("settings_form"):
-            c1, c2, c3 = st.columns(3)
-            short = c1.number_input("단기 이평", 1, 200, cur.short_period)
-            long = c2.number_input("장기 이평", 1, 400, cur.long_period)
-            rsi_p = c3.number_input("RSI 기간", 1, 100, cur.rsi_period)
-            rsi_os = c1.number_input("RSI 과매도", 0.0, 100.0, cur.rsi_oversold)
-            rsi_rc = c2.number_input("RSI 회복", 0.0, 100.0, cur.rsi_recover)
-            use_rsi = c3.checkbox("RSI 필터 사용(보수적)", cur.use_rsi_filter)
-            trail = c1.number_input("트레일링스톱 %", 0.0, 100.0, cur.trailing_stop_pct * 100) / 100
-            maxpos = c2.number_input("동시 보유 종목", 1, 50, cur.max_positions)
-            pos_pct = c3.number_input("종목당 비중 %", 0.0, 100.0, cur.position_pct * 100) / 100
-            vol_pct = c1.number_input("거래량대비 상한 %", 0.0, 100.0, cur.max_volume_pct * 100) / 100
-            top_n = c2.number_input("상위 N종목", 1, 500, cur.top_n)
-            min_val = c3.number_input("최소 거래대금(KRW)", 0.0, 1e12, cur.min_trade_value_krw)
-            init_cap = c1.number_input("초기 자본(KRW)", 0.0, 1e12, cur.initial_capital)
-            fee = c2.number_input("수수료율", 0.0, 1.0, cur.fee_rate, format="%.4f")
+            s1, s2, s3 = st.columns(3)
+            short = s1.number_input("단기 이평선(일)", 1, 200, cur.short_period)
+            long = s2.number_input("장기 이평선(일)", 1, 400, cur.long_period)
+            rsi_p = s3.number_input("RSI 기간(일)", 1, 100, cur.rsi_period)
+            rsi_os = s1.number_input("RSI 과매도선", 0.0, 100.0, cur.rsi_oversold)
+            rsi_rc = s2.number_input("RSI 회복선", 0.0, 100.0, cur.rsi_recover)
+            use_rsi = s3.checkbox("RSI 필터 사용(보수적)", cur.use_rsi_filter)
+            trail = s1.number_input("트레일링스톱(%)", 0.0, 100.0, cur.trailing_stop_pct * 100) / 100
+            maxpos = s2.number_input("동시 보유 종목수", 1, 50, cur.max_positions)
+            pos_pct = s3.number_input("종목당 비중(%)", 0.0, 100.0, cur.position_pct * 100) / 100
+            vol_pct = s1.number_input("거래량 대비 상한(%)", 0.0, 100.0, cur.max_volume_pct * 100) / 100
+            top_n = s2.number_input("매매대상 상위 N종목", 1, 500, cur.top_n)
+            min_val = s3.number_input("최소 거래대금(원)", 0.0, 1e12, cur.min_trade_value_krw)
+            init_cap = s1.number_input("초기 자본(원)", 0.0, 1e12, cur.initial_capital)
+            fee = s2.number_input("수수료율", 0.0, 1.0, cur.fee_rate, format="%.4f")
             if st.form_submit_button("저장"):
-                from dataclasses import replace
                 store.save_settings(replace(cur,
                     short_period=int(short), long_period=int(long), rsi_period=int(rsi_p),
                     rsi_oversold=rsi_os, rsi_recover=rsi_rc, use_rsi_filter=use_rsi,
