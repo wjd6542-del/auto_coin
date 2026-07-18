@@ -83,8 +83,9 @@ def test_holdings_table_empty():
     assert len(out) == 0
 
 
-def test_row_color():
-    from dashboard.app import row_color
-    assert "ffe3e3" in row_color("매수")   # 빨강 계열
-    assert "e2edff" in row_color("매도")   # 파랑 계열
-    assert row_color("기타") == ""
+def test_gubun_color():
+    from dashboard.app import gubun_color
+    assert "color:" in gubun_color("매수") and "ff4d4f" in gubun_color("매수")
+    assert "color:" in gubun_color("매도") and "4d9bff" in gubun_color("매도")
+    assert "background" not in gubun_color("매수")   # 배경 안 건드림
+    assert gubun_color("기타") == ""

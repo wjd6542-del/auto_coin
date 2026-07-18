@@ -51,12 +51,12 @@ def holdings_table(positions: dict) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=HOLDING_COLUMNS)
 
 
-def row_color(gubun: str) -> str:
-    """매수/매도에 따른 행 배경색 CSS (한국 관례: 매수 빨강, 매도 파랑)."""
+def gubun_color(gubun: str) -> str:
+    """매수/매도 글자색 CSS (배경 건드리지 않음. 다크·라이트 모두 잘 보이는 색)."""
     if gubun == "매수":
-        return "background-color: #ffe3e3"
+        return "color: #ff4d4f; font-weight: bold"
     if gubun == "매도":
-        return "background-color: #e2edff"
+        return "color: #4d9bff; font-weight: bold"
     return ""
 
 
@@ -107,8 +107,7 @@ def render() -> None:
 
         st.subheader("📒 거래 내역 (🔴매수 · 🔵매도)")
         disp = _won(format_trades(trades), ["체결가(원)", "거래금액(원)", "수수료(원)"])
-        styled = disp.style.apply(
-            lambda r: [row_color(r["구분"])] * len(r), axis=1)
+        styled = disp.style.map(gubun_color, subset=["구분"])
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
     st.divider()
