@@ -81,3 +81,10 @@ def test_holdings_table_empty():
     out = holdings_table({})
     assert list(out.columns) == HOLDING_COLUMNS
     assert len(out) == 0
+
+
+def test_row_color():
+    from dashboard.app import row_color
+    assert "ffe3e3" in row_color("매수")   # 빨강 계열
+    assert "e2edff" in row_color("매도")   # 파랑 계열
+    assert row_color("기타") == ""

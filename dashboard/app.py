@@ -51,6 +51,15 @@ def holdings_table(positions: dict) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=HOLDING_COLUMNS)
 
 
+def row_color(gubun: str) -> str:
+    """매수/매도에 따른 행 배경색 CSS (한국 관례: 매수 빨강, 매도 파랑)."""
+    if gubun == "매수":
+        return "background-color: #ffe3e3"
+    if gubun == "매도":
+        return "background-color: #e2edff"
+    return ""
+
+
 def _won(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     """지정 컬럼을 천단위 콤마 문자열로 포맷한 표시용 복사본."""
     out = df.copy()
@@ -96,9 +105,11 @@ def render() -> None:
             st.dataframe(_won(hold, ["매수가(원)", "매수금액(원)", "고점(원)"]),
                          use_container_width=True, hide_index=True)
 
-        st.subheader("📒 거래 내역 (매수·매도)")
-        st.dataframe(_won(format_trades(trades), ["체결가(원)", "거래금액(원)", "수수료(원)"]),
-                     use_container_width=True, hide_index=True)
+        st.subheader("📒 거래 내역 (🔴매수 · 🔵매도)")
+        disp = _won(format_trades(trades), ["체결가(원)", "거래금액(원)", "수수료(원)"])
+        styled = disp.style.apply(
+            lambda r: [row_color(r["구분"])] * len(r), axis=1)
+        st.dataframe(styled, use_container_width=True, hide_index=True)
 
     st.divider()
     with st.expander("⚙️ 전략 설정 (수정 후 저장하면 다음 실행부터 반영)"):
