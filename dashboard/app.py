@@ -60,11 +60,28 @@ def gubun_color(gubun: str) -> str:
     return ""
 
 
+def fmt_price(x: float) -> str:
+    """가격 표시. 저가 코인(1000원 미만)은 소수점까지 보여준다.
+
+    PUMP처럼 2.876원짜리 코인을 '3'으로 반올림하면 안 되기 때문이다.
+    """
+    if abs(x) >= 1000:
+        return f"{x:,.0f}"
+    return f"{x:,.4f}".rstrip("0").rstrip(".")
+
+
+PRICE_COLUMNS = {"체결가(원)", "매수가(원)", "고점(원)"}
+
+
 def _won(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
-    """지정 컬럼을 천단위 콤마 문자열로 포맷한 표시용 복사본."""
+    """지정 컬럼을 표시용 문자열로 포맷한 복사본 (가격은 저가코인 소수점 유지)."""
     out = df.copy()
     for c in cols:
-        if c in out.columns:
+        if c not in out.columns:
+            continue
+        if c in PRICE_COLUMNS:
+            out[c] = out[c].map(fmt_price)
+        else:
             out[c] = out[c].map(lambda x: f"{x:,.0f}")
     if "수량" in out.columns:
         out["수량"] = out["수량"].map(lambda x: f"{x:,.6f}")

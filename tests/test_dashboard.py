@@ -89,3 +89,13 @@ def test_gubun_color():
     assert "color:" in gubun_color("매도") and "4d9bff" in gubun_color("매도")
     assert "background" not in gubun_color("매수")   # 배경 안 건드림
     assert gubun_color("기타") == ""
+
+
+def test_fmt_price_keeps_decimals_for_cheap_coins():
+    from dashboard.app import fmt_price
+    # 저가 코인은 소수점 유지 (2.876을 3으로 반올림하면 안 됨)
+    assert fmt_price(2.876) == "2.876"
+    assert fmt_price(0.1234) == "0.1234"
+    # 고가 코인은 천단위 콤마 정수
+    assert fmt_price(2_718_000.0) == "2,718,000"
+    assert fmt_price(1000.0) == "1,000"
