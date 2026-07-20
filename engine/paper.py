@@ -92,7 +92,8 @@ class PaperTrader:
         )
         total = cash + holdings
         self.store.save_account(MODE, cash)
-        self.store.add_balance(ts=datetime.now(), total_krw=total, mode=MODE)
+        self.store.add_balance(ts=datetime.now(), total_krw=total,
+                               cash_krw=cash, holdings_krw=holdings, mode=MODE)
 
         return {"cash": cash, "positions": len(positions),
                 "filled": filled, "total": total}

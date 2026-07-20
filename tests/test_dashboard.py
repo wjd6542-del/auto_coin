@@ -99,3 +99,25 @@ def test_fmt_price_keeps_decimals_for_cheap_coins():
     # 고가 코인은 천단위 콤마 정수
     assert fmt_price(2_718_000.0) == "2,718,000"
     assert fmt_price(1000.0) == "1,000"
+
+
+def test_balance_chart_includes_cash_and_holdings():
+    import pandas as pd
+    from dashboard.app import balance_chart
+    b = pd.DataFrame([
+        {"ts": "2026-07-18", "total_krw": 1_000_000.0, "cash_krw": 1_000_000.0, "holdings_krw": 0.0},
+        {"ts": "2026-07-19", "total_krw": 1_000_000.0, "cash_krw": 600_000.0, "holdings_krw": 400_000.0},
+    ])
+    out = balance_chart(b)
+    assert list(out.columns) == ["총자산", "현금", "보유평가"]
+    # 매수 후: 현금 줄고 보유평가 늘어난 흐름이 보인다
+    assert out.iloc[1]["현금"] == 600_000.0
+    assert out.iloc[1]["보유평가"] == 400_000.0
+
+
+def test_balance_chart_without_cash_columns():
+    import pandas as pd
+    from dashboard.app import balance_chart
+    b = pd.DataFrame([{"ts": "2026-07-18", "total_krw": 1_000_000.0}])
+    out = balance_chart(b)
+    assert list(out.columns) == ["총자산"]

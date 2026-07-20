@@ -41,6 +41,21 @@ def format_trades(trades: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values("시각", ascending=False).reset_index(drop=True)
 
 
+def balance_chart(balance: pd.DataFrame) -> pd.DataFrame:
+    """자금 흐름 시계열: 총자산 / 현금 / 보유평가.
+
+    매수하면 현금↓·보유평가↑, 매도하면 반대로 움직이는 게 보인다.
+    기록이 없는(과거) 컬럼은 자동으로 뺀다.
+    """
+    df = balance.set_index("ts")
+    out = pd.DataFrame({"총자산": df["total_krw"]})
+    if "cash_krw" in df.columns and df["cash_krw"].notna().any():
+        out["현금"] = df["cash_krw"]
+    if "holdings_krw" in df.columns and df["holdings_krw"].notna().any():
+        out["보유평가"] = df["holdings_krw"]
+    return out
+
+
 def holdings_table(positions: dict) -> pd.DataFrame:
     """보유 포지션을 한글 컬럼 표로 변환한다."""
     if not positions:
@@ -110,9 +125,9 @@ def render() -> None:
         c3.metric("보유 종목", f"{len(positions)} 개")
         c4.metric("총 거래", f"{len(trades)} 건")
 
-        st.subheader("📈 총자산 추이")
-        chart = balance.rename(columns={"total_krw": "총자산(원)"}).set_index("ts")
-        st.line_chart(chart["총자산(원)"])
+        st.subheader("📈 자금 흐름 (총자산 · 현금 · 보유평가)")
+        st.line_chart(balance_chart(balance))
+        st.caption("매수하면 현금↓ 보유평가↑, 매도하면 현금↑ 보유평가↓ 로 움직인다.")
 
         st.subheader("💼 보유 현황")
         hold = holdings_table(positions)

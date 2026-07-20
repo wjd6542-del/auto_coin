@@ -37,6 +37,10 @@ class BalanceLog(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     ts: Mapped[datetime] = mapped_column(DateTime)
     total_krw: Mapped[float] = mapped_column(Float)
+    # 자금 흐름 추적용: 매수 시 현금↓·보유↑, 매도 시 반대.
+    # 기존 행에는 값이 없을 수 있어 nullable.
+    cash_krw: Mapped[float | None] = mapped_column(Float, nullable=True)
+    holdings_krw: Mapped[float | None] = mapped_column(Float, nullable=True)
     mode: Mapped[str] = mapped_column(String(10))
 
 

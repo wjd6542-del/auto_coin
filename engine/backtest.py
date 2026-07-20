@@ -84,7 +84,9 @@ class Backtest:
                 else:
                     holdings += pos.qty * pos.entry_price
             self.store.add_balance(ts=date.to_pydatetime(),
-                                    total_krw=capital + holdings, mode="backtest")
+                                    total_krw=capital + holdings,
+                                    cash_krw=capital, holdings_krw=holdings,
+                                    mode="backtest")
 
         final = capital + sum(
             pos.qty * float(candles_by_symbol[s].iloc[-1]["close"])
