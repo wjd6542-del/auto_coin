@@ -12,6 +12,7 @@ import streamlit as st
 
 from config import database, Settings
 from db.store import Store
+from engine.paper import PaperTrader
 
 TRADE_COLUMNS = ["시각", "종목", "구분", "체결가(원)", "수량", "거래금액(원)", "수수료(원)"]
 HOLDING_COLUMNS = ["종목", "매수가(원)", "수량", "매수금액(원)", "고점(원)"]
@@ -27,6 +28,17 @@ def load_data(store: Store, mode: str | None = None) -> tuple[pd.DataFrame, pd.D
 
 def load_settings(store: Store) -> Settings:
     return store.get_settings()
+
+
+def run_paper_now(store: Store, settings: Settings, client=None) -> dict:
+    """페이퍼 1 사이클을 지금 실행한다 (대시보드 수동 실행 버튼용).
+
+    client 미지정 시 실제 빗썸 클라이언트를 쓴다. 테스트는 stub 주입.
+    """
+    if client is None:
+        from bithumb.client import BithumbClient
+        client = BithumbClient()
+    return PaperTrader(settings, store, client, fee_rate=settings.fee_rate).run_once()
 
 
 def format_trades(trades: pd.DataFrame) -> pd.DataFrame:
@@ -109,6 +121,25 @@ def render() -> None:
     mode = st.radio("모드", ["backtest", "paper"], horizontal=True,
                     format_func=lambda m: {"backtest": "백테스트",
                                            "paper": "페이퍼(실시간 가상)"}[m])
+
+    # 페이퍼 수동 실행 버튼 (버튼 클릭 시 아래 load_data가 갱신된 DB를 읽음)
+    if mode == "paper":
+        if st.button("▶️ 페이퍼 지금 실행 (실시간 시세로 1회 매매)", type="primary"):
+            try:
+                with st.spinner("빗썸 시세 조회 후 매매 판단 중... (수십 초 걸릴 수 있다)"):
+                    summary = run_paper_now(store, load_settings(store))
+                st.session_state["paper_run_result"] = summary
+            except Exception as e:
+                st.session_state["paper_run_result"] = {"error": str(e)}
+        res = st.session_state.get("paper_run_result")
+        if res:
+            if "error" in res:
+                st.error(f"실행 실패: {res['error']}")
+            else:
+                st.success(
+                    f"실행 완료 — 현금 {res['cash']:,.0f}원 / 보유 {res['positions']}종목 "
+                    f"/ 이번 체결 {res['filled']}건 / 총자산 {res['total']:,.0f}원")
+
     balance, trades = load_data(store, mode=mode)
 
     # 요약 지표

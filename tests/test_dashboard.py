@@ -121,3 +121,26 @@ def test_balance_chart_without_cash_columns():
     b = pd.DataFrame([{"ts": "2026-07-18", "total_krw": 1_000_000.0}])
     out = balance_chart(b)
     assert list(out.columns) == ["총자산"]
+
+
+def test_run_paper_now_with_stub_client(tmp_path):
+    import pandas as pd
+    from config import Settings
+    from db.store import Store
+    from dashboard.app import run_paper_now
+
+    class StubClient:
+        def get_top_symbols(self, top_n, min_trade_value):
+            return ["AAA"]
+        def get_daily_candles(self, symbol):
+            closes = [100, 95, 90, 85, 80, 78, 85, 95, 108, 120, 130, 140]
+            idx = pd.date_range("2025-01-01", periods=len(closes), freq="D")
+            return pd.DataFrame({"open": closes, "high": closes, "low": closes,
+                                 "close": closes, "volume": [1_000_000.0]*len(closes)}, index=idx)
+
+    store = Store(str(tmp_path / "rp.db"))
+    store.create_all()
+    s = Settings(short_period=3, long_period=5, use_rsi_filter=False)
+    summary = run_paper_now(store, s, client=StubClient())
+    assert "total" in summary and "cash" in summary
+    assert store.get_account("paper") is not None
