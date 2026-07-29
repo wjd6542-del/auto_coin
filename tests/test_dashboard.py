@@ -144,3 +144,51 @@ def test_run_paper_now_with_stub_client(tmp_path):
     summary = run_paper_now(store, s, client=StubClient())
     assert "total" in summary and "cash" in summary
     assert store.get_account("paper") is not None
+
+
+def test_format_trades_includes_reason():
+    import pandas as pd
+    from dashboard.app import format_trades
+    trades = pd.DataFrame([
+        {"ts": "2026-07-18", "symbol": "ETH", "side": "buy", "price": 100.0,
+         "qty": 1.0, "fee": 0.0, "note": "골든크로스 매수", "mode": "paper"},
+    ])
+    out = format_trades(trades)
+    assert "사유" in out.columns
+    assert out.iloc[0]["사유"] == "골든크로스 매수"
+
+
+def test_format_trades_reason_missing_column():
+    import pandas as pd
+    from dashboard.app import format_trades
+    # note 컬럼이 아예 없는 예전 데이터도 깨지지 않아야 함
+    trades = pd.DataFrame([
+        {"ts": "2026-07-18", "symbol": "ETH", "side": "sell", "price": 100.0,
+         "qty": 1.0, "fee": 0.0, "mode": "paper"},
+    ])
+    out = format_trades(trades)
+    assert out.iloc[0]["사유"] == ""
+
+
+def test_position_situation():
+    from config import Settings
+    from risk.manager import Position
+    from dashboard.app import position_situation, SITUATION_COLUMNS
+    pos = {"ETH": Position("ETH", entry_price=100.0, qty=1.0, high_price=120.0)}
+    s = Settings(trailing_stop_pct=0.10)
+    price_map = {"ETH": 110.0}
+    trend_map = {"ETH": "상승 ▲"}
+    out = position_situation(pos, s, price_map, trend_map)
+    assert list(out.columns) == SITUATION_COLUMNS
+    row = out.iloc[0]
+    assert row["수익률"] == "+10.0%"          # (110-100)/100
+    assert row["손절가(원)"] == 108.0          # 120 × 0.9
+    assert row["추세"] == "상승 ▲"
+
+
+def test_position_situation_empty():
+    from config import Settings
+    from dashboard.app import position_situation, SITUATION_COLUMNS
+    out = position_situation({}, Settings(), {}, {})
+    assert list(out.columns) == SITUATION_COLUMNS
+    assert len(out) == 0

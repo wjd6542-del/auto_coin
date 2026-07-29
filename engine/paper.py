@@ -54,11 +54,17 @@ class PaperTrader:
             self.risk.update_high(pos, price)
             self.store.update_position_high(symbol, MODE, pos.high_price)
             sig = evaluate(candles[symbol], self.settings, in_position=True)
-            if self.risk.hit_trailing_stop(pos, price) or sig.action == "sell":
+            hit_stop = self.risk.hit_trailing_stop(pos, price)
+            if hit_stop or sig.action == "sell":
+                loss_pct = (price / pos.entry_price - 1) * 100
+                note = (f"트레일링스톱 매도 (고점 대비 하락, 손익 {loss_pct:+.1f}%)"
+                        if hit_stop else
+                        f"데드크로스 매도 (추세 꺾임, 손익 {loss_pct:+.1f}%)")
                 cash += pos.qty * price * (1 - self.fee_rate)
                 self.store.add_trade(ts=datetime.now(), symbol=symbol, side="sell",
                                      price=price, qty=pos.qty,
-                                     fee=pos.qty * price * self.fee_rate, mode=MODE)
+                                     fee=pos.qty * price * self.fee_rate,
+                                     note=note, mode=MODE)
                 self.store.remove_position(symbol, MODE)
                 del positions[symbol]
                 filled += 1
@@ -80,9 +86,12 @@ class PaperTrader:
             new_pos = Position(symbol, price, qty, price)
             positions[symbol] = new_pos
             self.store.add_position(new_pos, MODE)
+            note = ("골든크로스+RSI회복 매수" if self.settings.use_rsi_filter
+                    else f"골든크로스 매수 (RSI {sig.reason.get('rsi', 0):.0f})")
             self.store.add_trade(ts=datetime.now(), symbol=symbol, side="buy",
                                  price=price, qty=qty,
-                                 fee=qty * price * self.fee_rate, mode=MODE)
+                                 fee=qty * price * self.fee_rate,
+                                 note=note, mode=MODE)
             filled += 1
 
         # 3) 잔고 기록 + 저장

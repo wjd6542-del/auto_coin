@@ -14,8 +14,9 @@ from config import database, Settings
 from db.store import Store
 from engine.paper import PaperTrader
 
-TRADE_COLUMNS = ["시각", "종목", "구분", "체결가(원)", "수량", "거래금액(원)", "수수료(원)"]
+TRADE_COLUMNS = ["시각", "종목", "구분", "체결가(원)", "수량", "거래금액(원)", "수수료(원)", "사유"]
 HOLDING_COLUMNS = ["종목", "매수가(원)", "수량", "매수금액(원)", "고점(원)"]
+SITUATION_COLUMNS = ["종목", "평단(원)", "현재가(원)", "수익률", "추세", "손절가(원)", "손절까지"]
 
 
 def load_data(store: Store, mode: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -48,9 +49,31 @@ def format_trades(trades: pd.DataFrame) -> pd.DataFrame:
     df = trades.copy()
     df["구분"] = df["side"].map({"buy": "매수", "sell": "매도"}).fillna(df["side"])
     df["거래금액(원)"] = df["price"] * df["qty"]
+    if "note" not in df.columns:
+        df["note"] = ""
+    df["note"] = df["note"].fillna("")
     out = df.rename(columns={"ts": "시각", "symbol": "종목", "price": "체결가(원)",
-                             "qty": "수량", "fee": "수수료(원)"})[TRADE_COLUMNS]
+                             "qty": "수량", "fee": "수수료(원)", "note": "사유"})[TRADE_COLUMNS]
     return out.sort_values("시각", ascending=False).reset_index(drop=True)
+
+
+def position_situation(positions: dict, settings: Settings,
+                       price_map: dict, trend_map: dict) -> pd.DataFrame:
+    """보유 포지션의 현재 상황: 현재가·수익률·추세·손절가·손절까지 거리."""
+    if not positions:
+        return pd.DataFrame(columns=SITUATION_COLUMNS)
+    rows = []
+    for sym, p in positions.items():
+        cur = price_map.get(sym)
+        if cur is None:
+            continue
+        ret = (cur / p.entry_price - 1) * 100
+        stop = p.high_price * (1 - settings.trailing_stop_pct)
+        to_stop = (cur - stop) / cur * 100 if cur else 0.0
+        rows.append({"종목": sym, "평단(원)": p.entry_price, "현재가(원)": cur,
+                     "수익률": f"{ret:+.1f}%", "추세": trend_map.get(sym, "-"),
+                     "손절가(원)": stop, "손절까지": f"{to_stop:+.1f}%"})
+    return pd.DataFrame(rows, columns=SITUATION_COLUMNS)
 
 
 def balance_chart(balance: pd.DataFrame) -> pd.DataFrame:
@@ -97,7 +120,7 @@ def fmt_price(x: float) -> str:
     return f"{x:,.4f}".rstrip("0").rstrip(".")
 
 
-PRICE_COLUMNS = {"체결가(원)", "매수가(원)", "고점(원)"}
+PRICE_COLUMNS = {"체결가(원)", "매수가(원)", "고점(원)", "평단(원)", "현재가(원)", "손절가(원)"}
 
 
 def _won(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
@@ -113,6 +136,25 @@ def _won(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     if "수량" in out.columns:
         out["수량"] = out["수량"].map(lambda x: f"{x:,.6f}")
     return out
+
+
+@st.cache_data(ttl=60)
+def _fetch_price_trend(symbols: tuple, short: int, long: int) -> tuple[dict, dict]:
+    """보유 종목의 현재가와 추세(단기>장기=상승)를 빗썸에서 조회. 60초 캐시."""
+    from bithumb.client import BithumbClient
+    from strategy.indicators import sma
+    client = BithumbClient()
+    price_map, trend_map = {}, {}
+    for sym in symbols:
+        try:
+            df = client.get_daily_candles(sym)
+            price_map[sym] = float(df["close"].iloc[-1])
+            s = sma(df["close"], short).iloc[-1]
+            l = sma(df["close"], long).iloc[-1]
+            trend_map[sym] = "상승 ▲" if s > l else "하락 ▼"
+        except Exception:
+            pass
+    return price_map, trend_map
 
 
 def render() -> None:
@@ -167,6 +209,25 @@ def render() -> None:
         else:
             st.dataframe(_won(hold, ["매수가(원)", "매수금액(원)", "고점(원)"]),
                          use_container_width=True, hide_index=True)
+
+        # 현재 상황 요약 (실시간 시세 조회, 페이퍼 모드)
+        if mode == "paper" and positions:
+            st.subheader("📊 현재 상황 요약")
+            cs = load_settings(store)
+            with st.spinner("현재 시세 조회 중..."):
+                pmap, tmap = _fetch_price_trend(
+                    tuple(sorted(positions)), cs.short_period, cs.long_period)
+            sit = position_situation(positions, cs, pmap, tmap)
+            if sit.empty:
+                st.caption("시세를 불러오지 못했다.")
+            else:
+                st.dataframe(_won(sit, ["평단(원)", "현재가(원)", "손절가(원)"]),
+                             use_container_width=True, hide_index=True)
+                for _, r in sit.iterrows():
+                    st.markdown(
+                        f"- **{r['종목']}**: 현재 수익률 **{r['수익률']}** · 추세 {r['추세']} · "
+                        f"손절가까지 {r['손절까지']} 여유 "
+                        f"→ {'추세 유지 중, 계속 보유' if r['추세'].startswith('상승') else '추세 약화, 청산 주의'}")
 
         st.subheader("📒 거래 내역 (🔴매수 · 🔵매도)")
         disp = _won(format_trades(trades), ["체결가(원)", "거래금액(원)", "수수료(원)"])

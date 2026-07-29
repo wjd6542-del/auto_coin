@@ -17,6 +17,8 @@ class Trade(Base):
     price: Mapped[float] = mapped_column(Float)
     qty: Mapped[float] = mapped_column(Float)
     fee: Mapped[float] = mapped_column(Float)
+    # 매매 사유 (예: "골든크로스 매수", "트레일링스톱 매도"). 기존 행엔 없을 수 있어 nullable.
+    note: Mapped[str | None] = mapped_column(String(100), nullable=True)
     mode: Mapped[str] = mapped_column(String(10))
 
 

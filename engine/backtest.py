@@ -41,13 +41,15 @@ class Backtest:
                 self.risk.update_high(pos, price)
                 window = df.loc[:date]
                 sig = evaluate(window, self.settings, in_position=True)
-                if self.risk.hit_trailing_stop(pos, price) or sig.action == "sell":
+                hit_stop = self.risk.hit_trailing_stop(pos, price)
+                if hit_stop or sig.action == "sell":
                     proceeds = pos.qty * price * (1 - self.fee_rate)
                     capital += proceeds
+                    note = "트레일링스톱 매도" if hit_stop else "데드크로스 매도"
                     self.store.add_trade(ts=date.to_pydatetime(), symbol=symbol,
                                           side="sell", price=price, qty=pos.qty,
                                           fee=pos.qty * price * self.fee_rate,
-                                          mode="backtest")
+                                          note=note, mode="backtest")
                     del positions[symbol]
                     num_trades += 1
 
@@ -72,7 +74,7 @@ class Backtest:
                     self.store.add_trade(ts=date.to_pydatetime(), symbol=symbol,
                                           side="buy", price=price, qty=qty,
                                           fee=qty * price * self.fee_rate,
-                                          mode="backtest")
+                                          note="골든크로스 매수", mode="backtest")
                     num_trades += 1
 
             # 3) 잔고 기록 (현금 + 보유 평가액)
