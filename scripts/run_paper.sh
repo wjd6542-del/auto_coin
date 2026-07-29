@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 페이퍼 트레이딩 1 사이클 실행 (cron용)
 #
-# 매일 KST 00:30 자동 실행하려면 (crontab -e):
-#   30 0 * * * /Users/wjd/프로젝트/coin/scripts/run_paper.sh
+# 매일 KST 15:00(오후 3시) 자동 실행하려면 (crontab -e):
+#   0 15 * * * /Users/wjd/프로젝트/coin/scripts/run_paper.sh
 set -euo pipefail
 PROJECT_DIR="/Users/wjd/프로젝트/coin"
 cd "$PROJECT_DIR"
