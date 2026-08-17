@@ -55,9 +55,14 @@ class LiveTrader:
         self.risk = RiskManager(settings)
 
     def _current_total(self, cash: float, positions: dict, candles: dict) -> float:
-        holdings = sum(
-            pos.qty * float(candles[s]["close"].iloc[-1])
-            for s, pos in positions.items() if s in candles)
+        # 시세를 못 받은 보유종목은 평단으로 평가한다(총자산에서 누락 방지).
+        # 누락되면 투자상한이 뚫리거나 일일손실이 과소평가될 수 있어 안전상 중요.
+        holdings = 0.0
+        for s, pos in positions.items():
+            if s in candles:
+                holdings += pos.qty * float(candles[s]["close"].iloc[-1])
+            else:
+                holdings += pos.qty * pos.entry_price
         return cash + holdings
 
     def run_once(self) -> dict:

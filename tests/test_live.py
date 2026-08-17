@@ -82,3 +82,35 @@ def test_enabled_live_places_buy(tmp_path):
     assert any(o[0] == "buy" and o[1] == "AAA" for o in priv.orders)
     assert len(store.trades_df()) == 1
     assert "AAA" in store.get_positions("live")
+
+
+def test_current_total_falls_back_to_entry_price(tmp_path):
+    from risk.manager import Position
+    store = _store(tmp_path)
+    trader = LiveTrader(Settings(), store, MarketStub({}), PrivateStub(krw=0))
+    positions = {"XXX": Position("XXX", entry_price=100.0, qty=10.0, high_price=100.0)}
+    # XXX가 시세(candles)에 없어도 평단으로 평가 → 500 + 100*10 = 1500
+    assert trader._current_total(500.0, positions, {}) == 1500.0
+
+
+def test_max_invest_krw_caps_buy(tmp_path):
+    store = _store(tmp_path)
+    s = Settings(short_period=3, long_period=5, use_rsi_filter=False,
+                 live_enabled=True, max_invest_krw=10000, position_pct=1.0)
+    priv = PrivateStub(krw=1_000_000)
+    LiveTrader(s, store, MarketStub({"AAA": _series(UP)}), priv).run_once()
+    buys = [o for o in priv.orders if o[0] == "buy"]
+    assert len(buys) == 1
+    assert buys[0][2] <= 10000.5          # 상한(10000) 이하로 캡핑
+
+
+def test_blocked_records_balance_but_no_orders(tmp_path):
+    store = _store(tmp_path)
+    s = Settings(short_period=3, long_period=5, use_rsi_filter=False,
+                 live_enabled=True, kill_switch=True)
+    priv = PrivateStub(krw=300000)
+    out = LiveTrader(s, store, MarketStub({"AAA": _series(UP)}), priv).run_once()
+    assert out["blocked"] == "비상정지(kill_switch) 켜짐"
+    assert priv.orders == []               # 주문 0건
+    b = store.balance_df()
+    assert len(b[b["mode"] == "live"]) == 1  # 차단돼도 잔고는 기록
