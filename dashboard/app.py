@@ -31,6 +31,15 @@ def load_settings(store: Store) -> Settings:
     return store.get_settings()
 
 
+def live_safety_badge(settings: Settings) -> str:
+    """실거래 상태를 요약한 배지 문자열을 반환한다."""
+    if settings.kill_switch:
+        return "🛑 비상정지 켜짐 — 거래 중단"
+    if settings.live_enabled:
+        return "🟢 실거래 ON — 진짜 돈으로 매매 중"
+    return "⚪ 실거래 OFF — 판단만(주문 안 함)"
+
+
 def run_paper_now(store: Store, settings: Settings, client=None) -> dict:
     """페이퍼 1 사이클을 지금 실행한다 (대시보드 수동 실행 버튼용).
 
@@ -160,9 +169,10 @@ def _fetch_price_trend(symbols: tuple, short: int, long: int) -> tuple[dict, dic
 def render() -> None:
     st.title("코인 자동매매 봇 대시보드")
     store = Store(url=database.url())
-    mode = st.radio("모드", ["backtest", "paper"], horizontal=True,
+    mode = st.radio("모드", ["backtest", "paper", "live"], horizontal=True,
                     format_func=lambda m: {"backtest": "백테스트",
-                                           "paper": "페이퍼(실시간 가상)"}[m])
+                                           "paper": "페이퍼(실시간 가상)",
+                                           "live": "💰 실거래"}[m])
 
     # 페이퍼 수동 실행 버튼 (버튼 클릭 시 아래 load_data가 갱신된 DB를 읽음)
     if mode == "paper":
@@ -181,6 +191,48 @@ def render() -> None:
                 st.success(
                     f"실행 완료 — 현금 {res['cash']:,.0f}원 / 보유 {res['positions']}종목 "
                     f"/ 이번 체결 {res['filled']}건 / 총자산 {res['total']:,.0f}원")
+
+    if mode == "live":
+        st.error("⚠️ 실거래 페이지 — 진짜 돈으로 거래됩니다.")
+        cs = load_settings(store)
+        st.info(live_safety_badge(cs))
+        col1, col2 = st.columns(2)
+        with col1:
+            new_enabled = st.toggle("실거래 활성화 (live_enabled)", cs.live_enabled)
+        with col2:
+            new_kill = st.toggle("🛑 비상정지 (kill_switch)", cs.kill_switch)
+        # 실거래를 새로 켜는 건 진짜 돈이 나가므로 확인 게이트를 둔다.
+        # 끄기·비상정지는 안전 방향이라 즉시 반영.
+        turning_on = new_enabled and not cs.live_enabled
+        confirmed = True
+        if turning_on:
+            confirmed = st.checkbox(
+                "확인: 진짜 돈으로 자동매매를 시작합니다 (투자상한 내에서 실주문)")
+        if (new_enabled != cs.live_enabled or new_kill != cs.kill_switch):
+            if turning_on and not confirmed:
+                st.warning("실거래를 켜려면 위 확인란을 체크하세요.")
+            else:
+                store.save_settings(replace(cs, live_enabled=new_enabled, kill_switch=new_kill))
+                st.rerun()
+        st.caption(f"투자 상한 {cs.max_invest_krw:,.0f}원 · 일일 손실한도 "
+                   f"{cs.daily_loss_limit_pct*100:.0f}%")
+        if st.button("▶️ 실거래 지금 실행", type="primary"):
+            try:
+                from bithumb.private import BithumbPrivate
+                from bithumb.client import BithumbClient
+                from config import secrets as _sec
+                from engine.live import LiveTrader
+                with st.spinner("실잔고 조회 후 매매 판단 중..."):
+                    priv = BithumbPrivate(_sec.bithumb_api_key, _sec.bithumb_secret_key)
+                    res = LiveTrader(cs, store, BithumbClient(), priv,
+                                     fee_rate=cs.fee_rate).run_once()
+                if res["blocked"]:
+                    st.warning(f"차단됨: {res['blocked']}")
+                else:
+                    st.success(f"실행 완료 — 현금 {res['cash']:,.0f}원 / "
+                               f"보유 {res['positions']}종목 / 체결 {res['filled']}건")
+            except Exception as e:
+                st.error(f"실행 실패: {e}")
 
     balance, trades = load_data(store, mode=mode)
 

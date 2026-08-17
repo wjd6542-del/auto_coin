@@ -60,6 +60,11 @@ class Settings:
     initial_capital: float = 1_000_000.0
     fee_rate: float = 0.0004
     payment_currency: str = "KRW"
+    # 실거래 안전장치
+    live_enabled: bool = False          # True여야만 실주문
+    max_invest_krw: float = 300000.0    # 총 투입 상한
+    daily_loss_limit_pct: float = 0.05  # 일일 손실한도(초과 시 자동정지)
+    kill_switch: bool = False           # 비상정지
 
 
 # --------------------------------------------------------------------------

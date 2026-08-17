@@ -192,3 +192,14 @@ def test_position_situation_empty():
     out = position_situation({}, Settings(), {}, {})
     assert list(out.columns) == SITUATION_COLUMNS
     assert len(out) == 0
+
+
+def test_live_safety_badge():
+    from config import Settings
+    from dashboard.app import live_safety_badge
+    on = live_safety_badge(Settings(live_enabled=True, kill_switch=False))
+    off = live_safety_badge(Settings(live_enabled=False, kill_switch=False))
+    kill = live_safety_badge(Settings(live_enabled=True, kill_switch=True))
+    assert "실거래 ON" in on
+    assert "실거래 OFF" in off
+    assert "비상정지" in kill

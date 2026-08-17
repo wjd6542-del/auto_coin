@@ -1,10 +1,12 @@
 import argparse
 
-from config import database
+from config import database, secrets
 from bithumb.client import BithumbClient
+from bithumb.private import BithumbPrivate
 from db.store import Store
 from engine.backtest import Backtest, BacktestResult
 from engine.paper import PaperTrader
+from engine.live import LiveTrader
 from engine.tuner import run_grid
 
 
@@ -31,6 +33,11 @@ def run_backtest(client, store, settings) -> BacktestResult:
 
 def run_paper(client, store, settings) -> dict:
     return PaperTrader(settings, store, client, fee_rate=settings.fee_rate).run_once()
+
+
+def run_live(market_client, private_client, store, settings) -> dict:
+    return LiveTrader(settings, store, market_client, private_client,
+                      fee_rate=settings.fee_rate).run_once()
 
 
 # 튜닝 기본 그리드 (추세추종 파라미터 탐색)
@@ -70,7 +77,7 @@ def _print_tune_table(rows: list[dict]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="backtest",
-                        choices=["backtest", "tune", "paper"])
+                        choices=["backtest", "tune", "paper", "live"])
     args = parser.parse_args()
 
     if args.mode == "backtest":
@@ -103,6 +110,22 @@ def main() -> None:
         print(f"보유 종목: {summary['positions']}개")
         print(f"당일 체결: {summary['filled']}건")
         print(f"총자산: {summary['total']:,.0f} KRW")
+
+    elif args.mode == "live":
+        store = Store(url=database.url())
+        store.create_all()
+        settings = store.get_settings()
+        private = BithumbPrivate(secrets.bithumb_api_key, secrets.bithumb_secret_key)
+        try:
+            summary = run_live(BithumbClient(), private, store, settings)
+        except Exception as e:   # 네트워크 등 예외로 프로세스가 죽지 않게
+            print(f"⛔ 실거래 실행 오류: {e}")
+            return
+        if summary["blocked"]:
+            print(f"⛔ 실거래 차단: {summary['blocked']}")
+        else:
+            print(f"현금: {summary['cash']:,.0f} KRW / 보유 {summary['positions']}종목 "
+                  f"/ 체결 {summary['filled']}건 / 총자산 {summary['total']:,.0f} KRW")
 
 
 if __name__ == "__main__":

@@ -42,3 +42,31 @@ def test_run_paper_end_to_end(tmp_path):
     summary = run_paper(PaperStub(), store, s)
     assert "total" in summary
     assert store.get_account("paper") is not None
+
+
+def test_run_live_blocked_when_disabled(tmp_path):
+    from main import run_live
+
+    class MarketStub:
+        def get_top_symbols(self, top_n, mv):
+            return ["AAA"]
+        def get_daily_candles(self, s):
+            closes = [100, 95, 90, 85, 80, 78, 85, 95]
+            idx = pd.date_range("2025-01-01", periods=len(closes), freq="D")
+            return pd.DataFrame({"open": closes, "high": closes, "low": closes,
+                                 "close": closes, "volume": [1e6]*len(closes)}, index=idx)
+
+    class PrivateStub:
+        def get_balance(self):
+            return [{"currency": "KRW", "balance": "300000"}]
+        def market_buy(self, s, krw):
+            return {"uuid": "x"}
+        def market_sell(self, s, u):
+            return {"uuid": "x"}
+
+    store = Store(str(tmp_path / "ml.db"))
+    store.create_all()
+    s = Settings(short_period=3, long_period=5, use_rsi_filter=False,
+                 live_enabled=False)
+    out = run_live(MarketStub(), PrivateStub(), store, s)
+    assert out["blocked"] == "실거래 비활성(live_enabled=False)"

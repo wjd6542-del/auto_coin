@@ -350,15 +350,15 @@ class PrivateStub:
         self._krw = krw
         self._units = units or {}
         self.orders = []
-    def get_balance(self, currency="ALL"):
-        data = {"available_krw": str(self._krw)}
+    def get_balance(self):
+        bal = [{"currency": "KRW", "balance": str(self._krw)}]
         for sym, u in self._units.items():
-            data[f"available_{sym.lower()}"] = str(u)
-        return {"status": "0000", "data": data}
-    def market_buy(self, symbol, units):
-        self.orders.append(("buy", symbol, units)); return {"status": "0000"}
+            bal.append({"currency": sym.upper(), "balance": str(u)})
+        return bal
+    def market_buy(self, symbol, krw_amount):
+        self.orders.append(("buy", symbol, krw_amount)); return {"uuid": "x"}
     def market_sell(self, symbol, units):
-        self.orders.append(("sell", symbol, units)); return {"status": "0000"}
+        self.orders.append(("sell", symbol, units)); return {"uuid": "x"}
 
 
 def _store(tmp_path):
@@ -427,7 +427,7 @@ from config import Settings
 from db.store import Store
 from risk.manager import RiskManager, Position
 from strategy.signals import evaluate
-from bithumb.private import parse_krw_available
+from bithumb.private import parse_krw_available, order_ok
 
 MODE = "live"
 
@@ -518,7 +518,7 @@ class LiveTrader:
             hit_stop = self.risk.hit_trailing_stop(pos, price)
             if hit_stop or sig.action == "sell":
                 resp = self.private.market_sell(symbol, pos.qty)
-                if resp.get("status") != "0000":
+                if not order_ok(resp):
                     print(f"매도 실패 {symbol}: {resp}")
                     continue
                 loss_pct = (price / pos.entry_price - 1) * 100
@@ -547,8 +547,9 @@ class LiveTrader:
             cost = qty * price * (1 + self.fee_rate)
             if qty <= 0 or cost > cash or cost < 5000:   # 빗썸 최소주문 ~5000원
                 continue
-            resp = self.private.market_buy(symbol, qty)
-            if resp.get("status") != "0000":
+            krw_to_spend = qty * price   # 시장가 매수는 금액 기준
+            resp = self.private.market_buy(symbol, krw_to_spend)
+            if not order_ok(resp):
                 print(f"매수 실패 {symbol}: {resp}")
                 continue
             cash -= cost
@@ -610,10 +611,10 @@ def test_run_live_blocked_when_disabled(tmp_path):
                                  "close": closes, "volume": [1e6]*len(closes)}, index=idx)
 
     class PrivateStub:
-        def get_balance(self, currency="ALL"):
-            return {"status": "0000", "data": {"available_krw": "300000"}}
-        def market_buy(self, s, u): return {"status": "0000"}
-        def market_sell(self, s, u): return {"status": "0000"}
+        def get_balance(self):
+            return [{"currency": "KRW", "balance": "300000"}]
+        def market_buy(self, s, krw): return {"uuid": "x"}
+        def market_sell(self, s, u): return {"uuid": "x"}
 
     store = Store(str(tmp_path / "ml.db")); store.create_all()
     s = Settings(short_period=3, long_period=5, use_rsi_filter=False,
