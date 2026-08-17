@@ -201,9 +201,19 @@ def render() -> None:
             new_enabled = st.toggle("실거래 활성화 (live_enabled)", cs.live_enabled)
         with col2:
             new_kill = st.toggle("🛑 비상정지 (kill_switch)", cs.kill_switch)
-        if new_enabled != cs.live_enabled or new_kill != cs.kill_switch:
-            store.save_settings(replace(cs, live_enabled=new_enabled, kill_switch=new_kill))
-            st.rerun()
+        # 실거래를 새로 켜는 건 진짜 돈이 나가므로 확인 게이트를 둔다.
+        # 끄기·비상정지는 안전 방향이라 즉시 반영.
+        turning_on = new_enabled and not cs.live_enabled
+        confirmed = True
+        if turning_on:
+            confirmed = st.checkbox(
+                "확인: 진짜 돈으로 자동매매를 시작합니다 (투자상한 내에서 실주문)")
+        if (new_enabled != cs.live_enabled or new_kill != cs.kill_switch):
+            if turning_on and not confirmed:
+                st.warning("실거래를 켜려면 위 확인란을 체크하세요.")
+            else:
+                store.save_settings(replace(cs, live_enabled=new_enabled, kill_switch=new_kill))
+                st.rerun()
         st.caption(f"투자 상한 {cs.max_invest_krw:,.0f}원 · 일일 손실한도 "
                    f"{cs.daily_loss_limit_pct*100:.0f}%")
         if st.button("▶️ 실거래 지금 실행", type="primary"):

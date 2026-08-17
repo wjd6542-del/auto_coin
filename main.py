@@ -116,11 +116,16 @@ def main() -> None:
         store.create_all()
         settings = store.get_settings()
         private = BithumbPrivate(secrets.bithumb_api_key, secrets.bithumb_secret_key)
-        summary = run_live(BithumbClient(), private, store, settings)
+        try:
+            summary = run_live(BithumbClient(), private, store, settings)
+        except Exception as e:   # 네트워크 등 예외로 프로세스가 죽지 않게
+            print(f"⛔ 실거래 실행 오류: {e}")
+            return
         if summary["blocked"]:
             print(f"⛔ 실거래 차단: {summary['blocked']}")
-        print(f"현금: {summary['cash']:,.0f} KRW / 보유 {summary['positions']}종목 "
-              f"/ 체결 {summary['filled']}건 / 총자산 {summary['total']:,.0f} KRW")
+        else:
+            print(f"현금: {summary['cash']:,.0f} KRW / 보유 {summary['positions']}종목 "
+                  f"/ 체결 {summary['filled']}건 / 총자산 {summary['total']:,.0f} KRW")
 
 
 if __name__ == "__main__":
