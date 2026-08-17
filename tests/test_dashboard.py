@@ -203,3 +203,43 @@ def test_live_safety_badge():
     assert "실거래 ON" in on
     assert "실거래 OFF" in off
     assert "비상정지" in kill
+
+
+def test_realized_pnl_fifo():
+    import pandas as pd
+    from dashboard.app import realized_pnl
+    trades = pd.DataFrame([
+        {"ts": "2025-01-01", "symbol": "ETH", "side": "buy", "price": 100.0, "qty": 1.0, "fee": 0.0},
+        {"ts": "2025-01-02", "symbol": "ETH", "side": "sell", "price": 120.0, "qty": 1.0, "fee": 0.0},
+        {"ts": "2025-01-03", "symbol": "BTC", "side": "buy", "price": 50.0, "qty": 2.0, "fee": 0.0},  # 미청산
+    ])
+    # ETH: (120-100)*1 = +20, BTC 미청산 제외
+    assert realized_pnl(trades) == 20.0
+
+
+def test_realized_pnl_includes_fees():
+    import pandas as pd
+    from dashboard.app import realized_pnl
+    trades = pd.DataFrame([
+        {"ts": "2025-01-01", "symbol": "ETH", "side": "buy", "price": 100.0, "qty": 1.0, "fee": 5.0},
+        {"ts": "2025-01-02", "symbol": "ETH", "side": "sell", "price": 110.0, "qty": 1.0, "fee": 3.0},
+    ])
+    # (110-100)*1 - 5 - 3 = 2
+    assert realized_pnl(trades) == 2.0
+
+
+def test_realized_pnl_empty():
+    import pandas as pd
+    from dashboard.app import realized_pnl
+    assert realized_pnl(pd.DataFrame()) == 0.0
+
+
+def test_two_week_trend_normalizes():
+    import pandas as pd
+    from dashboard.app import two_week_trend
+    idx = pd.date_range("2025-01-01", periods=3)
+    closes = {"A": pd.Series([100.0, 110.0, 120.0], index=idx),
+              "B": pd.Series([2.0, 2.2, 1.8], index=idx)}
+    out = two_week_trend(closes)
+    assert out["A"].iloc[0] == 100.0 and out["A"].iloc[-1] == 120.0   # +20%
+    assert out["B"].iloc[0] == 100.0 and round(out["B"].iloc[-1], 1) == 90.0  # -10%

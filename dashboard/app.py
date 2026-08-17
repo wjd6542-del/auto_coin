@@ -100,6 +100,64 @@ def balance_chart(balance: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def realized_pnl(trades: pd.DataFrame) -> float:
+    """실현 손익(원). 매수-매도를 FIFO로 짝지어 청산된 부분의 손익 합계.
+
+    미청산(보유 중) 매수는 제외. 수수료도 차감한다.
+    """
+    if trades.empty:
+        return 0.0
+    from collections import defaultdict, deque
+    lots: dict = defaultdict(deque)   # symbol -> [ [qty, price], ... ]
+    pnl = 0.0
+    for _, t in trades.sort_values("ts").iterrows():
+        sym, qty, price = t["symbol"], float(t["qty"]), float(t["price"])
+        fee = float(t.get("fee", 0) or 0)
+        pnl -= fee
+        if t["side"] == "buy":
+            lots[sym].append([qty, price])
+        else:  # sell — 보유분과 짝지어 실현손익 누적
+            remaining = qty
+            while remaining > 1e-12 and lots[sym]:
+                lot = lots[sym][0]
+                take = min(remaining, lot[0])
+                pnl += take * (price - lot[1])
+                lot[0] -= take
+                remaining -= take
+                if lot[0] <= 1e-12:
+                    lots[sym].popleft()
+    return pnl
+
+
+def two_week_trend(closes_by_symbol: dict) -> pd.DataFrame:
+    """종목별 최근 종가를 기준일=100으로 정규화(추세 비교용).
+
+    가격대가 다른 종목(ETH 270만 vs PUMP 3원)을 한 차트에서 비교하려면
+    시작점을 100으로 맞춰 % 변화로 봐야 한다.
+    """
+    cols = {}
+    for sym, ser in closes_by_symbol.items():
+        s = ser.dropna()
+        if len(s) == 0 or float(s.iloc[0]) == 0:
+            continue
+        cols[sym] = s / float(s.iloc[0]) * 100
+    return pd.DataFrame(cols)
+
+
+@st.cache_data(ttl=300)
+def _fetch_recent_closes(symbols: tuple, days: int = 14) -> dict:
+    """종목별 최근 days일 종가를 빗썸에서 조회. 5분 캐시."""
+    from bithumb.client import BithumbClient
+    client = BithumbClient()
+    out = {}
+    for s in symbols:
+        try:
+            out[s] = client.get_daily_candles(s)["close"].tail(days)
+        except Exception:
+            pass
+    return out
+
+
 def holdings_table(positions: dict) -> pd.DataFrame:
     """보유 포지션을 한글 컬럼 표로 변환한다."""
     if not positions:
@@ -244,15 +302,31 @@ def render() -> None:
         end = balance.iloc[-1]["total_krw"]
         ret = (end - start) / start * 100
         positions = store.get_positions(mode)
-        c1, c2, c3, c4 = st.columns(4)
+        realized = realized_pnl(trades)
+        c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("현재 총자산", f"{end:,.0f} 원")
         c2.metric("수익률", f"{ret:+.2f}%")
-        c3.metric("보유 종목", f"{len(positions)} 개")
-        c4.metric("총 거래", f"{len(trades)} 건")
+        c3.metric("실현 수익", f"{realized:+,.0f} 원")
+        c4.metric("보유 종목", f"{len(positions)} 개")
+        c5.metric("총 거래", f"{len(trades)} 건")
+        st.caption("실현 수익 = 이미 팔아서 확정된 손익(수수료 차감). 보유 중 평가손익은 제외.")
 
         st.subheader("📈 자금 흐름 (총자산 · 현금 · 보유평가)")
         st.line_chart(balance_chart(balance))
         st.caption("매수하면 현금↓ 보유평가↑, 매도하면 현금↑ 보유평가↓ 로 움직인다.")
+
+        # 매매 종목 2주 추세 (보유 + 거래 종목)
+        traded = set(positions) | (set(trades["symbol"]) if not trades.empty else set())
+        if traded:
+            st.subheader("📉 매매 종목 2주 추세 (시작=100 정규화)")
+            with st.spinner("최근 시세 조회 중..."):
+                closes = _fetch_recent_closes(tuple(sorted(traded)), 14)
+            trend = two_week_trend(closes)
+            if trend.empty:
+                st.caption("시세를 불러오지 못했다.")
+            else:
+                st.line_chart(trend)
+                st.caption("각 종목의 14일 전 종가를 100으로 맞춘 상대 추세. 100 위=상승, 아래=하락.")
 
         st.subheader("💼 보유 현황")
         hold = holdings_table(positions)
