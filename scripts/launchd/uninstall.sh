@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # launchd 자동 실행 해제
-for p in com.coin.dashboard com.coin.paper; do
+for p in com.coin.dashboard com.coin.paper com.coin.live; do
   launchctl unload ~/Library/LaunchAgents/$p.plist 2>/dev/null || true
   rm -f ~/Library/LaunchAgents/$p.plist
 done
