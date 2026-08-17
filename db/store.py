@@ -15,6 +15,7 @@ class Store:
         "rsi_recover", "use_rsi_filter", "trailing_stop_pct", "max_positions",
         "position_pct", "max_volume_pct", "top_n", "min_trade_value_krw",
         "initial_capital", "fee_rate",
+        "live_enabled", "max_invest_krw", "daily_loss_limit_pct", "kill_switch",
     )
 
     def __init__(self, db_path: str | None = None, url: str | None = None):

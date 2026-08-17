@@ -82,3 +82,7 @@ class AppSettings(Base):
     min_trade_value_krw: Mapped[float] = mapped_column(Float)
     initial_capital: Mapped[float] = mapped_column(Float)
     fee_rate: Mapped[float] = mapped_column(Float)
+    live_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    max_invest_krw: Mapped[float] = mapped_column(Float, default=300000.0)
+    daily_loss_limit_pct: Mapped[float] = mapped_column(Float, default=0.05)
+    kill_switch: Mapped[bool] = mapped_column(Boolean, default=False)
