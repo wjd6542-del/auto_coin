@@ -71,7 +71,9 @@ def test_market_sell_posts_volume():
 
 
 def test_order_ok():
-    assert order_ok({"uuid": "abc", "market": "KRW-ETH"}) is True
+    # 빗썸 실제 성공 응답은 order_id를 준다
+    assert order_ok({"order_id": "C0101...", "market": "KRW-BTC"}) is True
+    assert order_ok({"uuid": "abc"}) is True                    # 혹시 모를 호환
     assert order_ok({"error": {"name": "x", "message": "y"}}) is False
     assert order_ok({}) is False
 

@@ -66,8 +66,10 @@ class BithumbPrivate:
 
 
 def order_ok(resp: dict) -> bool:
-    """주문 성공 여부. 성공=uuid 존재, 실패=error 키."""
-    return isinstance(resp, dict) and "error" not in resp and "uuid" in resp
+    """주문 성공 여부. 빗썸 성공 응답은 order_id를 준다(uuid 아님). 실패는 error 키."""
+    if not isinstance(resp, dict) or "error" in resp:
+        return False
+    return bool(resp.get("order_id") or resp.get("uuid"))
 
 
 def parse_krw_available(balance: list) -> float:

@@ -39,11 +39,11 @@ class PrivateStub:
         self.orders.append(("buy", symbol, krw_amount))
         if symbol in self.buy_fill:
             self.units[symbol] = self.units.get(symbol, 0.0) + self.buy_fill[symbol]
-        return {"uuid": "x"}
+        return {"order_id": "x"}
     def market_sell(self, symbol, units):
         self.orders.append(("sell", symbol, units))
         self.units[symbol] = 0.0
-        return {"uuid": "x"}
+        return {"order_id": "x"}
 
 
 def _store(tmp_path):
