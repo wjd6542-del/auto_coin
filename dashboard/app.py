@@ -227,28 +227,9 @@ def _fetch_price_trend(symbols: tuple, short: int, long: int) -> tuple[dict, dic
 def render() -> None:
     st.title("코인 자동매매 봇 대시보드")
     store = Store(url=database.url())
-    mode = st.radio("모드", ["backtest", "paper", "live"], horizontal=True,
+    mode = st.radio("모드", ["backtest", "live"], horizontal=True,
                     format_func=lambda m: {"backtest": "백테스트",
-                                           "paper": "페이퍼(실시간 가상)",
                                            "live": "💰 실거래"}[m])
-
-    # 페이퍼 수동 실행 버튼 (버튼 클릭 시 아래 load_data가 갱신된 DB를 읽음)
-    if mode == "paper":
-        if st.button("▶️ 페이퍼 지금 실행 (실시간 시세로 1회 매매)", type="primary"):
-            try:
-                with st.spinner("빗썸 시세 조회 후 매매 판단 중... (수십 초 걸릴 수 있다)"):
-                    summary = run_paper_now(store, load_settings(store))
-                st.session_state["paper_run_result"] = summary
-            except Exception as e:
-                st.session_state["paper_run_result"] = {"error": str(e)}
-        res = st.session_state.get("paper_run_result")
-        if res:
-            if "error" in res:
-                st.error(f"실행 실패: {res['error']}")
-            else:
-                st.success(
-                    f"실행 완료 — 현금 {res['cash']:,.0f}원 / 보유 {res['positions']}종목 "
-                    f"/ 이번 체결 {res['filled']}건 / 총자산 {res['total']:,.0f}원")
 
     if mode == "live":
         st.error("⚠️ 실거래 페이지 — 진짜 돈으로 거래됩니다.")
@@ -337,7 +318,7 @@ def render() -> None:
                          use_container_width=True, hide_index=True)
 
         # 현재 상황 요약 (실시간 시세 조회, 페이퍼 모드)
-        if mode == "paper" and positions:
+        if mode == "live" and positions:
             st.subheader("📊 현재 상황 요약")
             cs = load_settings(store)
             with st.spinner("현재 시세 조회 중..."):
