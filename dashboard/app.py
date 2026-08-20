@@ -225,6 +225,7 @@ def _fetch_price_trend(symbols: tuple, short: int, long: int) -> tuple[dict, dic
 
 
 def render() -> None:
+    st.set_page_config(page_title="코인 자동매매 봇", layout="wide")
     st.title("코인 자동매매 봇 대시보드")
     store = Store(url=database.url())
     mode = st.radio("모드", ["backtest", "live"], horizontal=True,
@@ -284,10 +285,14 @@ def render() -> None:
         ret = (end - start) / start * 100
         positions = store.get_positions(mode)
         realized = realized_pnl(trades)
+
+        def _short(x):   # 큰 금액은 만원 단위로 짧게(칸 잘림 방지)
+            return f"{x/10000:,.1f}만원" if abs(x) >= 10000 else f"{x:,.0f}원"
+
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("현재 총자산", f"{end:,.0f} 원")
+        c1.metric("현재 총자산", _short(end))
         c2.metric("수익률", f"{ret:+.2f}%")
-        c3.metric("실현 수익", f"{realized:+,.0f} 원")
+        c3.metric("실현 수익", ("+" if realized >= 0 else "") + _short(realized))
         c4.metric("보유 종목", f"{len(positions)} 개")
         c5.metric("총 거래", f"{len(trades)} 건")
         st.caption("실현 수익 = 이미 팔아서 확정된 손익(수수료 차감). 보유 중 평가손익은 제외.")
