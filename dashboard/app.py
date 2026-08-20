@@ -279,7 +279,7 @@ def render() -> None:
     st.set_page_config(page_title="코인 자동매매 봇", layout="wide")
     st.title("코인 자동매매 봇 대시보드")
     store = Store(url=database.url())
-    mode = st.radio("모드", ["backtest", "live"], horizontal=True,
+    mode = st.radio("모드", ["live", "backtest"], horizontal=True,
                     format_func=lambda m: {"backtest": "백테스트",
                                            "live": "💰 실거래"}[m])
 
