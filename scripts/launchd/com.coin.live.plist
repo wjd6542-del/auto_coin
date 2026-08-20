@@ -10,9 +10,11 @@
   <key>StartCalendarInterval</key>
   <array>
     <dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>4</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
     <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
   </array>
   <key>StandardOutPath</key><string>/Users/wjd/프로젝트/coin/logs/live_launchd.log</string>
   <key>StandardErrorPath</key><string>/Users/wjd/프로젝트/coin/logs/live_launchd.log</string>
