@@ -129,6 +129,47 @@ def realized_pnl(trades: pd.DataFrame) -> float:
     return pnl
 
 
+SYMBOL_STAT_COLUMNS = ["종목", "매수", "매도", "실현손익(원)", "승률"]
+
+
+def symbol_stats(trades: pd.DataFrame) -> pd.DataFrame:
+    """종목별 통계: 매수/매도 횟수, 실현손익(FIFO, 수수료 차감), 승률(청산 기준)."""
+    if trades.empty:
+        return pd.DataFrame(columns=SYMBOL_STAT_COLUMNS)
+    from collections import deque
+    rows = []
+    for sym, g in trades.sort_values("ts").groupby("symbol"):
+        lots: deque = deque()
+        realized = 0.0
+        buys = sells = wins = closed = 0
+        for _, t in g.iterrows():
+            fee = float(t.get("fee", 0) or 0)
+            realized -= fee
+            if t["side"] == "buy":
+                buys += 1
+                lots.append([float(t["qty"]), float(t["price"])])
+            else:
+                sells += 1
+                remaining, gross = float(t["qty"]), 0.0
+                while remaining > 1e-12 and lots:
+                    lot = lots[0]
+                    take = min(remaining, lot[0])
+                    gross += take * (float(t["price"]) - lot[1])
+                    lot[0] -= take
+                    remaining -= take
+                    if lot[0] <= 1e-12:
+                        lots.popleft()
+                realized += gross
+                closed += 1
+                if gross - fee > 0:
+                    wins += 1
+        rows.append({"종목": sym, "매수": buys, "매도": sells,
+                     "실현손익(원)": round(realized),
+                     "승률": f"{wins/closed*100:.0f}%" if closed else "-"})
+    df = pd.DataFrame(rows, columns=SYMBOL_STAT_COLUMNS)
+    return df.sort_values("실현손익(원)", ascending=False).reset_index(drop=True)
+
+
 def two_week_trend(closes_by_symbol: dict) -> pd.DataFrame:
     """종목별 최근 종가를 기준일=100으로 정규화(추세 비교용).
 
@@ -174,6 +215,16 @@ def gubun_color(gubun: str) -> str:
         return "color: #ff4d4f; font-weight: bold"
     if gubun == "매도":
         return "color: #4d9bff; font-weight: bold"
+    return ""
+
+
+def _pnl_color(v) -> str:
+    """실현손익 표시 문자열의 부호에 따른 색(이익 빨강/손실 파랑)."""
+    s = str(v)
+    if s.startswith("-"):
+        return "color: #4d9bff"
+    if s not in ("0원", "0"):
+        return "color: #ff4d4f"
     return ""
 
 
@@ -345,6 +396,16 @@ def render() -> None:
         disp = _won(format_trades(trades), ["체결가(원)", "거래금액(원)", "수수료(원)"])
         styled = disp.style.map(gubun_color, subset=["구분"])
         st.dataframe(styled, use_container_width=True, hide_index=True)
+
+        st.subheader("📊 종목별 통계 (실현손익순)")
+        stats = symbol_stats(trades)
+        if stats.empty:
+            st.caption("아직 거래가 없다.")
+        else:
+            sdisp = _won(stats, ["실현손익(원)"])
+            styled_s = sdisp.style.map(_pnl_color, subset=["실현손익(원)"])
+            st.dataframe(styled_s, use_container_width=True, hide_index=True)
+            st.caption("실현손익=청산 완료분(수수료 차감). 승률=수익 낸 매도 비율.")
 
     st.divider()
     with st.expander("⚙️ 전략 설정 (수정 후 저장하면 다음 실행부터 반영)"):

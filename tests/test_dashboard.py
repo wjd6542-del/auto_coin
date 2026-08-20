@@ -243,3 +243,29 @@ def test_two_week_trend_normalizes():
     out = two_week_trend(closes)
     assert out["A"].iloc[0] == 100.0 and out["A"].iloc[-1] == 120.0   # +20%
     assert out["B"].iloc[0] == 100.0 and round(out["B"].iloc[-1], 1) == 90.0  # -10%
+
+
+def test_symbol_stats():
+    import pandas as pd
+    from dashboard.app import symbol_stats, SYMBOL_STAT_COLUMNS
+    trades = pd.DataFrame([
+        {"ts": "2025-01-01", "symbol": "ETH", "side": "buy", "price": 100.0, "qty": 1.0, "fee": 0.0},
+        {"ts": "2025-01-02", "symbol": "ETH", "side": "sell", "price": 120.0, "qty": 1.0, "fee": 0.0},
+        {"ts": "2025-01-03", "symbol": "BTC", "side": "buy", "price": 50.0, "qty": 1.0, "fee": 0.0},
+        {"ts": "2025-01-04", "symbol": "BTC", "side": "sell", "price": 40.0, "qty": 1.0, "fee": 0.0},
+    ])
+    out = symbol_stats(trades)
+    assert list(out.columns) == SYMBOL_STAT_COLUMNS
+    eth = out[out["종목"] == "ETH"].iloc[0]
+    assert eth["실현손익(원)"] == 20 and eth["승률"] == "100%" and eth["매수"] == 1 and eth["매도"] == 1
+    btc = out[out["종목"] == "BTC"].iloc[0]
+    assert btc["실현손익(원)"] == -10 and btc["승률"] == "0%"
+    # 실현손익 내림차순 → ETH가 먼저
+    assert out.iloc[0]["종목"] == "ETH"
+
+
+def test_pnl_color():
+    from dashboard.app import _pnl_color
+    assert "ff4d4f" in _pnl_color("2.0만원")     # 이익 빨강
+    assert "4d9bff" in _pnl_color("-1.0만원")    # 손실 파랑
+    assert _pnl_color("0원") == ""
