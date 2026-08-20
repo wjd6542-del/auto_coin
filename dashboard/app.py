@@ -40,6 +40,50 @@ def live_safety_badge(settings: Settings) -> str:
     return "⚪ 실거래 OFF — 판단만(주문 안 함)"
 
 
+def manual_sell(store: Store, symbol: str,
+                market_client=None, private_client=None) -> dict:
+    """보유 종목을 지금 시장가로 수동 매도한다 (실거래). 실보유 수량 기준.
+
+    성공 시 {symbol, qty, price}, 실패 시 {error}. client 미지정 시 실제 클라이언트.
+    """
+    from datetime import datetime
+    from bithumb.private import order_ok, parse_units
+    if market_client is None:
+        from bithumb.client import BithumbClient
+        market_client = BithumbClient()
+    if private_client is None:
+        from bithumb.private import BithumbPrivate
+        from config import secrets as _sec
+        private_client = BithumbPrivate(_sec.bithumb_api_key, _sec.bithumb_secret_key)
+
+    pos = store.get_positions("live").get(symbol)
+    try:
+        balance = private_client.get_balance()
+    except Exception as e:
+        return {"error": f"잔고조회 실패: {e}"}
+    held = parse_units(balance, symbol)
+    sell_qty = held if held > 0 else (pos.qty if pos else 0.0)
+    if sell_qty <= 0:
+        return {"error": "보유 수량이 없다"}
+    try:
+        resp = private_client.market_sell(symbol, sell_qty)
+    except Exception as e:
+        return {"error": f"주문 오류: {e}"}
+    if not order_ok(resp):
+        return {"error": f"주문 실패: {resp}"}
+    try:
+        price = float(market_client.get_daily_candles(symbol)["close"].iloc[-1])
+    except Exception:
+        price = pos.entry_price if pos else 0.0
+    fee_rate = store.get_settings().fee_rate
+    store.add_trade(ts=datetime.now(), symbol=symbol, side="sell", price=price,
+                    qty=sell_qty, fee=sell_qty * price * fee_rate,
+                    note="수동 매도", mode="live")
+    if pos:
+        store.remove_position(symbol, "live")
+    return {"symbol": symbol, "qty": sell_qty, "price": price}
+
+
 def run_paper_now(store: Store, settings: Settings, client=None) -> dict:
     """페이퍼 1 사이클을 지금 실행한다 (대시보드 수동 실행 버튼용).
 
@@ -372,6 +416,25 @@ def render() -> None:
         else:
             st.dataframe(_won(hold, ["매수가(원)", "매수금액(원)", "고점(원)"]),
                          use_container_width=True, hide_index=True)
+
+        # 수동 매도 (실거래 모드, 진짜 주문 — 확인 필요)
+        if mode == "live" and positions:
+            st.markdown("**🔻 수동 매도 (즉시 시장가)**")
+            sc1, sc2, sc3 = st.columns([2, 2, 1])
+            sell_sym = sc1.selectbox("종목", sorted(positions), key="sell_sym")
+            confirm_sell = sc2.checkbox("확인(진짜 매도)", key="confirm_sell")
+            if sc3.button("매도", type="primary", key="manual_sell_btn"):
+                if not confirm_sell:
+                    st.warning("확인란을 체크해야 매도된다.")
+                else:
+                    with st.spinner(f"{sell_sym} 시장가 매도 중..."):
+                        r = manual_sell(store, sell_sym)
+                    if "error" in r:
+                        st.error(f"매도 실패: {r['error']}")
+                    else:
+                        st.success(f"{r['symbol']} {r['qty']:.8f}개 매도 완료 "
+                                   f"(체결가 ~{r['price']:,.4f}원)")
+                        st.rerun()
 
         # 현재 상황 요약 (실시간 시세 조회, 페이퍼 모드)
         if mode == "live" and positions:

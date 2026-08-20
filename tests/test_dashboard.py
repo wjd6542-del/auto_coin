@@ -269,3 +269,49 @@ def test_pnl_color():
     assert "ff4d4f" in _pnl_color("2.0만원")     # 이익 빨강
     assert "4d9bff" in _pnl_color("-1.0만원")    # 손실 파랑
     assert _pnl_color("0원") == ""
+
+
+def test_manual_sell(tmp_path):
+    import pandas as pd
+    from db.store import Store
+    from risk.manager import Position
+    from dashboard.app import manual_sell
+
+    class MktStub:
+        def get_daily_candles(self, symbol):
+            idx = pd.date_range("2025-01-01", periods=3)
+            return pd.DataFrame({"close": [90.0, 95.0, 110.0]}, index=idx)
+
+    class PrivStub:
+        def __init__(self):
+            self.orders = []
+        def get_balance(self):
+            return [{"currency": "KRW", "balance": "100"},
+                    {"currency": "ETH", "balance": "0.5"}]
+        def market_sell(self, symbol, units):
+            self.orders.append((symbol, units))
+            return {"order_id": "x"}
+
+    store = Store(str(tmp_path / "ms.db")); store.create_all()
+    store.get_settings()
+    store.add_position(Position("ETH", entry_price=100.0, qty=0.5, high_price=120.0), "live")
+    priv = PrivStub()
+    r = manual_sell(store, "ETH", market_client=MktStub(), private_client=priv)
+    assert r["symbol"] == "ETH" and r["qty"] == 0.5      # 실보유 수량 매도
+    assert priv.orders == [("ETH", 0.5)]
+    assert "ETH" not in store.get_positions("live")       # 포지션 제거됨
+    t = store.trades_df()
+    assert len(t[t["mode"] == "live"]) == 1 and t.iloc[-1]["side"] == "sell"
+
+
+def test_manual_sell_no_holding(tmp_path):
+    from db.store import Store
+    from dashboard.app import manual_sell
+    class PrivStub:
+        def get_balance(self):
+            return [{"currency": "KRW", "balance": "100"}]
+        def market_sell(self, s, u):
+            raise AssertionError("보유 없는데 주문하면 안 됨")
+    store = Store(str(tmp_path / "ms2.db")); store.create_all(); store.get_settings()
+    r = manual_sell(store, "ETH", market_client=None, private_client=PrivStub())
+    assert "error" in r
