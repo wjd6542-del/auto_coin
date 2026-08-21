@@ -16,7 +16,8 @@ from engine.paper import PaperTrader
 
 TRADE_COLUMNS = ["시각", "종목", "구분", "체결가(원)", "수량", "거래금액(원)", "수수료(원)", "사유"]
 HOLDING_COLUMNS = ["종목", "매수가(원)", "수량", "매수금액(원)", "고점(원)"]
-SITUATION_COLUMNS = ["종목", "평단(원)", "현재가(원)", "수익률", "추세", "손절가(원)", "손절까지"]
+SITUATION_COLUMNS = ["종목", "평단(원)", "현재가(원)", "매수금액(원)", "손익금액(원)",
+                     "수익률", "추세", "손절가(원)", "손절까지"]
 
 
 def load_data(store: Store, mode: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -123,7 +124,10 @@ def position_situation(positions: dict, settings: Settings,
         ret = (cur / p.entry_price - 1) * 100
         stop = p.high_price * (1 - settings.trailing_stop_pct)
         to_stop = (cur - stop) / cur * 100 if cur else 0.0
+        buy_amt = p.entry_price * p.qty
+        pnl_amt = (cur - p.entry_price) * p.qty
         rows.append({"종목": sym, "평단(원)": p.entry_price, "현재가(원)": cur,
+                     "매수금액(원)": round(buy_amt), "손익금액(원)": round(pnl_amt),
                      "수익률": f"{ret:+.1f}%", "추세": trend_map.get(sym, "-"),
                      "손절가(원)": stop, "손절까지": f"{to_stop:+.1f}%"})
     return pd.DataFrame(rows, columns=SITUATION_COLUMNS)
@@ -173,32 +177,34 @@ def realized_pnl(trades: pd.DataFrame) -> float:
     return pnl
 
 
-SYMBOL_STAT_COLUMNS = ["종목", "매수", "매도", "실현손익(원)", "승률"]
+SYMBOL_STAT_COLUMNS = ["종목", "매수", "매도", "매수금액(원)", "손익금액(원)", "승률"]
 
 
 def symbol_stats(trades: pd.DataFrame) -> pd.DataFrame:
-    """종목별 통계: 매수/매도 횟수, 실현손익(FIFO, 수수료 차감), 승률(청산 기준)."""
+    """종목별 통계: 매수/매도 횟수, 총 매수금액, 실현손익(FIFO·수수료차감), 승률."""
     if trades.empty:
         return pd.DataFrame(columns=SYMBOL_STAT_COLUMNS)
     from collections import deque
     rows = []
     for sym, g in trades.sort_values("ts").groupby("symbol"):
         lots: deque = deque()
-        realized = 0.0
+        realized = buy_amount = 0.0
         buys = sells = wins = closed = 0
         for _, t in g.iterrows():
             fee = float(t.get("fee", 0) or 0)
+            price, qty = float(t["price"]), float(t["qty"])
             realized -= fee
             if t["side"] == "buy":
                 buys += 1
-                lots.append([float(t["qty"]), float(t["price"])])
+                buy_amount += price * qty
+                lots.append([qty, price])
             else:
                 sells += 1
-                remaining, gross = float(t["qty"]), 0.0
+                remaining, gross = qty, 0.0
                 while remaining > 1e-12 and lots:
                     lot = lots[0]
                     take = min(remaining, lot[0])
-                    gross += take * (float(t["price"]) - lot[1])
+                    gross += take * (price - lot[1])
                     lot[0] -= take
                     remaining -= take
                     if lot[0] <= 1e-12:
@@ -208,10 +214,11 @@ def symbol_stats(trades: pd.DataFrame) -> pd.DataFrame:
                 if gross - fee > 0:
                     wins += 1
         rows.append({"종목": sym, "매수": buys, "매도": sells,
-                     "실현손익(원)": round(realized),
+                     "매수금액(원)": round(buy_amount),
+                     "손익금액(원)": round(realized),
                      "승률": f"{wins/closed*100:.0f}%" if closed else "-"})
     df = pd.DataFrame(rows, columns=SYMBOL_STAT_COLUMNS)
-    return df.sort_values("실현손익(원)", ascending=False).reset_index(drop=True)
+    return df.sort_values("손익금액(원)", ascending=False).reset_index(drop=True)
 
 
 def two_week_trend(closes_by_symbol: dict) -> pd.DataFrame:
@@ -469,8 +476,10 @@ def render() -> None:
             if sit.empty:
                 st.caption("시세를 불러오지 못했다.")
             else:
-                st.dataframe(_won(sit, ["평단(원)", "현재가(원)", "손절가(원)"]),
-                             use_container_width=True, hide_index=True)
+                sit_styled = _won(sit, ["평단(원)", "현재가(원)", "손절가(원)",
+                                        "매수금액(원)", "손익금액(원)"]) \
+                    .style.map(_pnl_color, subset=["손익금액(원)"])
+                st.dataframe(sit_styled, use_container_width=True, hide_index=True)
                 for _, r in sit.iterrows():
                     st.markdown(
                         f"- **{r['종목']}**: 현재 수익률 **{r['수익률']}** · 추세 {r['추세']} · "
@@ -487,8 +496,8 @@ def render() -> None:
         if stats.empty:
             st.caption("아직 거래가 없다.")
         else:
-            sdisp = _won(stats, ["실현손익(원)"])
-            styled_s = sdisp.style.map(_pnl_color, subset=["실현손익(원)"])
+            sdisp = _won(stats, ["매수금액(원)", "손익금액(원)"])
+            styled_s = sdisp.style.map(_pnl_color, subset=["손익금액(원)"])
             st.dataframe(styled_s, use_container_width=True, hide_index=True)
             st.caption("실현손익=청산 완료분(수수료 차감). 승률=수익 낸 매도 비율.")
 

@@ -182,6 +182,8 @@ def test_position_situation():
     assert list(out.columns) == SITUATION_COLUMNS
     row = out.iloc[0]
     assert row["수익률"] == "+10.0%"          # (110-100)/100
+    assert row["매수금액(원)"] == 100   # 평단100 x 수량1
+    assert row["손익금액(원)"] == 10    # (110-100) x 1
     assert row["손절가(원)"] == 108.0          # 120 × 0.9
     assert row["추세"] == "상승 ▲"
 
@@ -257,9 +259,9 @@ def test_symbol_stats():
     out = symbol_stats(trades)
     assert list(out.columns) == SYMBOL_STAT_COLUMNS
     eth = out[out["종목"] == "ETH"].iloc[0]
-    assert eth["실현손익(원)"] == 20 and eth["승률"] == "100%" and eth["매수"] == 1 and eth["매도"] == 1
+    assert eth["손익금액(원)"] == 20 and eth["승률"] == "100%" and eth["매수금액(원)"] == 100
     btc = out[out["종목"] == "BTC"].iloc[0]
-    assert btc["실현손익(원)"] == -10 and btc["승률"] == "0%"
+    assert btc["손익금액(원)"] == -10 and btc["승률"] == "0%"
     # 실현손익 내림차순 → ETH가 먼저
     assert out.iloc[0]["종목"] == "ETH"
 
