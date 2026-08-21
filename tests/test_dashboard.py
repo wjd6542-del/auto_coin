@@ -317,3 +317,19 @@ def test_manual_sell_no_holding(tmp_path):
     store = Store(str(tmp_path / "ms2.db")); store.create_all(); store.get_settings()
     r = manual_sell(store, "ETH", market_client=None, private_client=PrivStub())
     assert "error" in r
+
+
+def test_format_trades_per_trade_pnl():
+    import pandas as pd
+    from dashboard.app import format_trades
+    trades = pd.DataFrame([
+        {"ts": "2025-01-01", "symbol": "ETH", "side": "buy", "price": 100.0, "qty": 1.0, "fee": 1.0},
+        {"ts": "2025-01-02", "symbol": "ETH", "side": "sell", "price": 130.0, "qty": 1.0, "fee": 2.0},
+    ])
+    out = format_trades(trades)
+    assert "순익(원)" in out.columns
+    sell = out[out["구분"] == "매도"].iloc[0]
+    buy = out[out["구분"] == "매수"].iloc[0]
+    # 순익 = gross(30) - 매도수수료(2) - 매수수수료(1) = +27
+    assert sell["순익(원)"] == "+27"
+    assert buy["순익(원)"] == ""      # 매수행은 공란

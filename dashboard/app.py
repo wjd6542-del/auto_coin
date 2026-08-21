@@ -14,7 +14,8 @@ from config import database, Settings
 from db.store import Store
 from engine.paper import PaperTrader
 
-TRADE_COLUMNS = ["시각", "종목", "구분", "체결가(원)", "수량", "거래금액(원)", "수수료(원)", "사유"]
+TRADE_COLUMNS = ["시각", "종목", "구분", "체결가(원)", "수량", "거래금액(원)",
+                 "수수료(원)", "순익(원)", "사유"]
 HOLDING_COLUMNS = ["종목", "매수가(원)", "수량", "매수금액(원)", "고점(원)"]
 SITUATION_COLUMNS = ["종목", "평단(원)", "현재가(원)", "매수금액(원)", "손익금액(원)",
                      "수익률", "추세", "손절가(원)", "손절까지"]
@@ -106,9 +107,40 @@ def format_trades(trades: pd.DataFrame) -> pd.DataFrame:
     if "note" not in df.columns:
         df["note"] = ""
     df["note"] = df["note"].fillna("")
+    # 매도별 순익(원): FIFO로 매수와 짝지어 매수·매도 수수료까지 뺀 순손익. 매수행은 공란.
+    df["순익(원)"] = _per_trade_pnl(df)
     out = df.rename(columns={"ts": "시각", "symbol": "종목", "price": "체결가(원)",
                              "qty": "수량", "fee": "수수료(원)", "note": "사유"})[TRADE_COLUMNS]
     return out.sort_values("시각", ascending=False).reset_index(drop=True)
+
+
+def _per_trade_pnl(df: pd.DataFrame) -> pd.Series:
+    """각 거래 행의 순익 문자열. 매도행=실현순익(+/-), 매수행=공란."""
+    from collections import deque
+    lots: dict = {}
+    result = {}
+    for idx, t in df.sort_values("ts").iterrows():
+        sym = t["symbol"]
+        price, qty = float(t["price"]), float(t["qty"])
+        fee = float(t.get("fee", 0) or 0)
+        lots.setdefault(sym, deque())
+        if t["side"] == "buy":
+            lots[sym].append([qty, price, (fee / qty if qty else 0.0)])
+            result[idx] = ""
+        else:
+            remaining, gross, buy_fee = qty, 0.0, 0.0
+            while remaining > 1e-12 and lots[sym]:
+                lot = lots[sym][0]
+                take = min(remaining, lot[0])
+                gross += take * (price - lot[1])
+                buy_fee += take * lot[2]
+                lot[0] -= take
+                remaining -= take
+                if lot[0] <= 1e-12:
+                    lots[sym].popleft()
+            net = gross - fee - buy_fee
+            result[idx] = f"{net:+,.0f}"
+    return pd.Series(result)
 
 
 def position_situation(positions: dict, settings: Settings,
@@ -488,8 +520,10 @@ def render() -> None:
 
         st.subheader("📒 거래 내역 (🔴매수 · 🔵매도)")
         disp = _won(format_trades(trades), ["체결가(원)", "거래금액(원)", "수수료(원)"])
-        styled = disp.style.map(gubun_color, subset=["구분"])
+        styled = (disp.style.map(gubun_color, subset=["구분"])
+                  .map(_pnl_color, subset=["순익(원)"]))
         st.dataframe(styled, use_container_width=True, hide_index=True)
+        st.caption("순익(원) = 매도 시 그 매매의 실제 손익(매수·매도 수수료 차감). 매수행은 공란.")
 
         st.subheader("📊 종목별 통계 (실현손익순)")
         stats = symbol_stats(trades)
