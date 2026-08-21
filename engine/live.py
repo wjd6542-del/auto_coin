@@ -36,6 +36,27 @@ def safety_block_reason(settings: Settings, current_total: float,
     return None
 
 
+def reconcile_positions(store: Store, private_client, mode: str = MODE) -> list:
+    """DB 포지션을 실계좌 잔고와 동기화한다.
+
+    앱 등 외부에서 팔아 실보유가 0이 된 종목(유령 포지션)을 DB에서 제거한다.
+    제거된 심볼 리스트를 반환. 잔고조회 실패 시 아무것도 안 함(빈 리스트).
+    """
+    try:
+        balance = private_client.get_balance()
+    except Exception as e:
+        print(f"동기화용 잔고조회 실패: {e}")
+        return []
+    removed = []
+    for sym in list(store.get_positions(mode)):
+        if parse_units(balance, sym) <= 1e-8:
+            store.remove_position(sym, mode)
+            removed.append(sym)
+    if removed:
+        print(f"외부 매도 반영 — 포지션 제거: {removed}")
+    return removed
+
+
 def _loss_baseline(store: Store) -> float:
     """일일 손실 기준선.
 
@@ -103,6 +124,11 @@ class LiveTrader:
             return {"cash": 0.0, "positions": len(positions),
                     "filled": 0, "total": 0.0, "blocked": "잔고조회 실패"}
         cash = parse_krw_available(balance)
+        # 외부(앱) 매도 반영: 실보유가 0인 유령 포지션 제거
+        for sym in list(positions):
+            if parse_units(balance, sym) <= 1e-8:
+                self.store.remove_position(sym, MODE)
+                del positions[sym]
         total = self._current_total(cash, positions, candles)
 
         # 안전장치 (baseline은 오늘 기록 추가 전에 계산)

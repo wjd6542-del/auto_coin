@@ -417,6 +417,21 @@ def render() -> None:
             st.dataframe(_won(hold, ["매수가(원)", "매수금액(원)", "고점(원)"]),
                          use_container_width=True, hide_index=True)
 
+        # 잔고 동기화 (앱 등 외부 매도로 생긴 유령 포지션 정리)
+        if mode == "live" and positions:
+            if st.button("🔄 잔고 동기화 (앱에서 판 것 반영)"):
+                from engine.live import reconcile_positions
+                from bithumb.private import BithumbPrivate
+                from config import secrets as _sec
+                with st.spinner("실계좌 잔고와 대조 중..."):
+                    removed = reconcile_positions(
+                        store, BithumbPrivate(_sec.bithumb_api_key, _sec.bithumb_secret_key))
+                if removed:
+                    st.success(f"외부 매도 반영: {', '.join(removed)} 포지션 정리됨")
+                    st.rerun()
+                else:
+                    st.info("실잔고와 일치 — 정리할 유령 포지션 없음")
+
         # 수동 매도 (실거래 모드, 진짜 주문 — 확인 필요)
         if mode == "live" and positions:
             st.markdown("**🔻 수동 매도 (즉시 시장가)**")

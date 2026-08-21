@@ -197,3 +197,28 @@ def test_current_total_falls_back_to_entry_price(tmp_path):
     trader = LiveTrader(Settings(), store, MarketStub({}), PrivateStub(krw=0))
     positions = {"XXX": Position("XXX", entry_price=100.0, qty=10.0, high_price=100.0)}
     assert trader._current_total(500.0, positions, {}) == 1500.0
+
+
+# ---- 외부(앱) 매도 반영: 유령 포지션 제거 ----
+
+def test_reconcile_removes_phantom_positions(tmp_path):
+    from engine.live import reconcile_positions
+    store = _store(tmp_path)
+    # DB엔 2종목 보유로 기록
+    store.add_position(Position("AAA", entry_price=100.0, qty=1.0, high_price=100.0), "live")
+    store.add_position(Position("BBB", entry_price=50.0, qty=2.0, high_price=50.0), "live")
+    # 실잔고엔 AAA만 있음(BBB는 앱에서 팔았다고 가정)
+    priv = PrivateStub(krw=0, units={"AAA": 1.0})
+    removed = reconcile_positions(store, priv, "live")
+    assert removed == ["BBB"]
+    assert set(store.get_positions("live")) == {"AAA"}
+
+
+def test_run_once_drops_externally_sold_position(tmp_path):
+    store = _store(tmp_path)
+    s = Settings(short_period=3, long_period=5, use_rsi_filter=False, live_enabled=True)
+    # DB엔 CCC 보유, 실잔고엔 없음(외부 매도)
+    store.add_position(Position("CCC", entry_price=100.0, qty=1.0, high_price=100.0), "live")
+    priv = PrivateStub(krw=300000)   # units 비어있음 → CCC 실보유 0
+    out = LiveTrader(s, store, MarketStub({}), priv).run_once()
+    assert "CCC" not in store.get_positions("live")   # 유령 포지션 제거됨
