@@ -16,7 +16,9 @@ from config import Settings
 from db.store import Store
 from risk.manager import RiskManager, Position
 from strategy.signals import evaluate
-from bithumb.private import parse_krw_available, parse_units, order_ok
+from bithumb.private import (
+    parse_krw_available, parse_units, order_ok, latest_sell_fill,
+)
 
 MODE = "live"
 MIN_ORDER_KRW = 5000.0   # 빗썸 최소 주문금액(대략)
@@ -55,6 +57,35 @@ def reconcile_positions(store: Store, private_client, mode: str = MODE) -> list:
     if removed:
         print(f"외부 매도 반영 — 포지션 제거: {removed}")
     return removed
+
+
+def sync_live(store: Store, private_client, market_client=None, mode: str = MODE) -> dict:
+    """실잔고 동기화 + 외부(앱) 매도를 실제 체결가로 거래내역에 반영.
+
+    실보유가 0이 된 포지션을 정리하고, 그 종목의 최근 매도 체결(실제 평균가·
+    수수료)을 '앱 매도(동기화)' 거래로 기록한다. 반환 {removed, reflected} 또는 {error}.
+    """
+    from datetime import datetime
+    try:
+        balance = private_client.get_balance()
+    except Exception as e:
+        return {"error": f"잔고조회 실패: {e}"}
+    removed, reflected = [], []
+    for sym in list(store.get_positions(mode)):
+        if parse_units(balance, sym) > 1e-8:
+            continue
+        try:
+            fill = latest_sell_fill(private_client.get_orders(f"KRW-{sym}"))
+        except Exception:
+            fill = None
+        if fill and fill["qty"] > 0:
+            store.add_trade(ts=datetime.now(), symbol=sym, side="sell",
+                            price=fill["price"], qty=fill["qty"], fee=fill["fee"],
+                            note="앱 매도(동기화)", mode=mode)
+            reflected.append(sym)
+        store.remove_position(sym, mode)
+        removed.append(sym)
+    return {"removed": removed, "reflected": reflected}
 
 
 def _loss_baseline(store: Store) -> float:

@@ -222,3 +222,39 @@ def test_run_once_drops_externally_sold_position(tmp_path):
     priv = PrivateStub(krw=300000)   # units 비어있음 → CCC 실보유 0
     out = LiveTrader(s, store, MarketStub({}), priv).run_once()
     assert "CCC" not in store.get_positions("live")   # 유령 포지션 제거됨
+
+
+# ---- sync_live: 앱 매도를 실제 체결가로 반영 ----
+
+def test_sync_live_reflects_app_sell(tmp_path):
+    from engine.live import sync_live
+    store = _store(tmp_path); store.get_settings()
+    store.add_position(Position("DDD", entry_price=100.0, qty=1.0, high_price=100.0), "live")
+
+    class PrivWithOrders:
+        def get_balance(self):
+            return [{"currency": "KRW", "balance": "0"}]   # DDD 실보유 0(앱에서 팖)
+        def get_orders(self, market, state="done", limit=20):
+            return [{"side": "ask", "state": "done", "executed_volume": "1.0",
+                     "executed_funds": "130.0", "paid_fee": "0.05",
+                     "created_at": "2026-08-20T10:00:00+09:00"}]
+
+    r = sync_live(store, PrivWithOrders())
+    assert r["removed"] == ["DDD"] and r["reflected"] == ["DDD"]
+    assert "DDD" not in store.get_positions("live")
+    t = store.trades_df(); tt = t[t["mode"] == "live"].iloc[-1]
+    assert tt["side"] == "sell" and tt["price"] == 130.0 and tt["qty"] == 1.0
+    assert tt["note"] == "앱 매도(동기화)"
+
+
+def test_sync_live_no_change(tmp_path):
+    from engine.live import sync_live
+    store = _store(tmp_path); store.get_settings()
+    store.add_position(Position("EEE", entry_price=100.0, qty=1.0, high_price=100.0), "live")
+    class Priv:
+        def get_balance(self):
+            return [{"currency": "EEE", "balance": "1.0"}]   # 실보유 유지
+        def get_orders(self, m, state="done", limit=20):
+            raise AssertionError("보유 유지면 주문조회 안 해야")
+    r = sync_live(store, Priv())
+    assert r["removed"] == [] and "EEE" in store.get_positions("live")
