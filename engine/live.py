@@ -138,8 +138,8 @@ class LiveTrader:
         positions = self.store.get_positions(MODE)
 
         # 시세 수집 (후보 + 보유)
-        symbols = self.market.get_top_symbols(
-            self.settings.top_n, self.settings.min_trade_value_krw)
+        from bithumb.client import select_universe
+        symbols = select_universe(self.market, self.settings)
         candles: dict = {}
         for symbol in set(symbols) | set(positions):
             try:

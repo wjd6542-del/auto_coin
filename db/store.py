@@ -16,6 +16,7 @@ class Store:
         "position_pct", "max_volume_pct", "top_n", "min_trade_value_krw",
         "initial_capital", "fee_rate",
         "live_enabled", "max_invest_krw", "daily_loss_limit_pct", "kill_switch",
+        "use_market_cap",
     )
 
     def __init__(self, db_path: str | None = None, url: str | None = None):

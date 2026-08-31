@@ -32,8 +32,8 @@ class PaperTrader:
         positions = self.store.get_positions(MODE)
 
         # 시세 수집: 후보 상위종목 + 보유종목
-        symbols = self.client.get_top_symbols(
-            self.settings.top_n, self.settings.min_trade_value_krw)
+        from bithumb.client import select_universe
+        symbols = select_universe(self.client, self.settings)
         candles: dict = {}
         for symbol in set(symbols) | set(positions):
             try:

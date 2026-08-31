@@ -552,15 +552,16 @@ def render() -> None:
             vol_pct = s1.number_input("거래량 대비 상한(%)", 0.0, 100.0, cur.max_volume_pct * 100) / 100
             top_n = s2.number_input("매매대상 상위 N종목", 1, 500, cur.top_n)
             min_val = s3.number_input("최소 거래대금(원)", 0.0, 1e12, cur.min_trade_value_krw)
-            init_cap = s1.number_input("초기 자본(원)", 0.0, 1e12, cur.initial_capital)
-            fee = s2.number_input("수수료율", 0.0, 1.0, cur.fee_rate, format="%.4f")
+            use_mcap = s1.checkbox("시가총액 상위 기준(잡코인 제외)", cur.use_market_cap)
+            init_cap = s2.number_input("초기 자본(원)", 0.0, 1e12, cur.initial_capital)
+            fee = s3.number_input("수수료율", 0.0, 1.0, cur.fee_rate, format="%.4f")
             if st.form_submit_button("저장"):
                 store.save_settings(replace(cur,
                     short_period=int(short), long_period=int(long), rsi_period=int(rsi_p),
                     rsi_oversold=rsi_os, rsi_recover=rsi_rc, use_rsi_filter=use_rsi,
                     trailing_stop_pct=trail, max_positions=int(maxpos), position_pct=pos_pct,
                     max_volume_pct=vol_pct, top_n=int(top_n), min_trade_value_krw=min_val,
-                    initial_capital=init_cap, fee_rate=fee))
+                    use_market_cap=use_mcap, initial_capital=init_cap, fee_rate=fee))
                 st.success("저장됐다. 다음 봇 실행부터 반영된다.")
 
 

@@ -1,7 +1,7 @@
 import argparse
 
 from config import database, secrets
-from bithumb.client import BithumbClient
+from bithumb.client import BithumbClient, select_universe
 from bithumb.private import BithumbPrivate
 from db.store import Store
 from engine.backtest import Backtest, BacktestResult
@@ -14,7 +14,7 @@ def fetch_candles(client, settings, min_len: int | None = None) -> dict:
     """상위 종목의 일봉 캔들을 수집한다. min_len 미만 종목은 제외."""
     if min_len is None:
         min_len = settings.long_period + 1
-    symbols = client.get_top_symbols(settings.top_n, settings.min_trade_value_krw)
+    symbols = select_universe(client, settings)
     candles = {}
     for symbol in symbols:
         try:

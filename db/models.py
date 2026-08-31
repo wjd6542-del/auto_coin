@@ -86,3 +86,4 @@ class AppSettings(Base):
     max_invest_krw: Mapped[float] = mapped_column(Float, default=300000.0)
     daily_loss_limit_pct: Mapped[float] = mapped_column(Float, default=0.05)
     kill_switch: Mapped[bool] = mapped_column(Boolean, default=False)
+    use_market_cap: Mapped[bool] = mapped_column(Boolean, default=True)

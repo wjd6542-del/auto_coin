@@ -55,6 +55,8 @@ class Settings:
     # 유니버스
     top_n: int = 100
     min_trade_value_krw: float = 1_000_000_000.0
+    # True면 매매대상을 시가총액 상위 기준으로(잡코인 제외). False면 거래대금 순.
+    use_market_cap: bool = True
     # 실행·저장
     db_path: str = "coin.db"
     initial_capital: float = 1_000_000.0
